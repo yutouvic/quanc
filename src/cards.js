@@ -14,16 +14,18 @@
  * - 平民（plain）  ：无特效。
  */
 
+import { FAMILY_ICONS, TYPE_ICONS } from './icons.js';
+
 /**
  * 六个家族定义。
  */
 export const FAMILIES = [
-  { id: 'lion', name: '狮族', icon: '🦁', color: '#d4a017' },
-  { id: 'eagle', name: '鹰族', icon: '🦅', color: '#5b8dd9' },
-  { id: 'wolf', name: '狼族', icon: '🐺', color: '#9aa4b2' },
-  { id: 'serpent', name: '蛇族', icon: '🐍', color: '#c2185b' },
-  { id: 'stag', name: '鹿族', icon: '🦌', color: '#4caf50' },
-  { id: 'bear', name: '熊族', icon: '🐻', color: '#8d5524' },
+  { id: 'lion', name: '狮族', icon: '🦁', iconSvg: FAMILY_ICONS.lion, color: '#d4a017' },
+  { id: 'eagle', name: '鹰族', icon: '🦅', iconSvg: FAMILY_ICONS.eagle, color: '#5b8dd9' },
+  { id: 'wolf', name: '狼族', icon: '🐺', iconSvg: FAMILY_ICONS.wolf, color: '#9aa4b2' },
+  { id: 'serpent', name: '蛇族', icon: '🐍', iconSvg: FAMILY_ICONS.serpent, color: '#c2185b' },
+  { id: 'stag', name: '鹿族', icon: '🦌', iconSvg: FAMILY_ICONS.stag, color: '#4caf50' },
+  { id: 'bear', name: '熊族', icon: '🐻', iconSvg: FAMILY_ICONS.bear, color: '#8d5524' },
 ];
 
 /**
@@ -31,11 +33,11 @@ export const FAMILIES = [
  * weight 为该牌在「得宠/失宠统计」与「领地计分」中的权重。
  */
 export const CARD_TYPES = {
-  assassin: { name: '刺客', icon: '🗡️', weight: 1 },
-  spy: { name: '间谍', icon: '🕵️', weight: 1 },
-  noble: { name: '贵族', icon: '👑', weight: 2 },
-  guard: { name: '守卫', icon: '🛡️', weight: 1 },
-  plain: { name: '平民', icon: '·', weight: 1 },
+  assassin: { name: '刺客', icon: '🗡️', iconSvg: TYPE_ICONS.assassin, weight: 1 },
+  spy: { name: '间谍', icon: '🕵️', iconSvg: TYPE_ICONS.spy, weight: 1 },
+  noble: { name: '贵族', icon: '👑', iconSvg: TYPE_ICONS.noble, weight: 2 },
+  guard: { name: '守卫', icon: '🛡️', iconSvg: TYPE_ICONS.guard, weight: 1 },
+  plain: { name: '平民', icon: '·', iconSvg: '', weight: 1 },
 };
 
 /**

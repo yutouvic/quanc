@@ -255,34 +255,122 @@ label input, label select {
 .dest-title { font-size: 12px; opacity: 0.7; min-width: 96px; }
 .dest-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
 
+/* ========== 通用 SVG 图标 ========== */
+.ico { display: inline-flex; align-items: center; justify-content: center; line-height: 0; }
+.ico svg { width: 1em; height: 1em; display: block; }
+
 /* ========== 家族卡牌 ========== */
 .card {
-  width: var(--card-w); height: var(--card-h); border-radius: 10px;
-  background: linear-gradient(160deg, color-mix(in srgb, var(--c) 55%, #1a1a1a), #1c1c1c);
-  border: 2px solid var(--c);
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
-  cursor: pointer; user-select: none;
-  position: relative;
-  transition: transform 0.12s, box-shadow 0.12s;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+  --c: #888;
+  width: var(--card-w); height: var(--card-h);
+  padding: 2px; border-radius: 12px;
+  background: linear-gradient(160deg,
+    color-mix(in srgb, var(--c) 76%, #fff 18%) 0%,
+    var(--c) 36%,
+    color-mix(in srgb, var(--c) 50%, #000 42%) 64%,
+    color-mix(in srgb, var(--c) 68%, #fff 8%) 100%);
+  box-shadow:
+    0 8px 18px rgba(0,0,0,0.5),
+    0 2px 5px rgba(0,0,0,0.4),
+    0 0 0 1px color-mix(in srgb, var(--c) 40%, transparent);
+  cursor: pointer; user-select: none; position: relative;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
-.card:hover { transform: translateY(-6px); box-shadow: 0 8px 16px rgba(0,0,0,0.45); }
+.card:hover {
+  transform: translateY(-6px);
+  box-shadow:
+    0 14px 26px rgba(0,0,0,0.55),
+    0 0 0 1px color-mix(in srgb, var(--c) 65%, #fff 12%),
+    0 0 16px color-mix(in srgb, var(--c) 45%, transparent);
+}
 .card.card-selected {
   transform: translateY(-8px);
-  box-shadow: 0 0 0 3px #ffd966, 0 8px 18px rgba(0,0,0,0.5);
+  box-shadow:
+    0 0 0 3px #ffd966,
+    0 0 22px rgba(255,217,102,0.6),
+    0 12px 24px rgba(0,0,0,0.55);
 }
-.card-icon { font-size: 30px; }
-.card-fam { font-size: 13px; font-weight: 700; }
-.card-sm { width: 56px; height: 78px; }
-.card-sm .card-icon { font-size: 22px; }
-.card-sm .card-fam { font-size: 11px; }
 
-/* 贵族大卡：与贵族小卡一致的家族色内描边（保留大卡投影） */
-.card-noble { box-shadow: inset 0 0 0 2px var(--c), 0 2px 6px rgba(0,0,0,0.3); }
-.card-noble:hover { box-shadow: inset 0 0 0 2px var(--c), 0 8px 16px rgba(0,0,0,0.45); }
-.card-noble.card-selected {
-  box-shadow: inset 0 0 0 2px var(--c), 0 0 0 3px #ffd966, 0 8px 18px rgba(0,0,0,0.5);
+.card-frame {
+  width: 100%; height: 100%; border-radius: 10px;
+  position: relative; overflow: hidden;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  background:
+    radial-gradient(130% 90% at 28% 16%, rgba(255,255,255,0.18), transparent 52%),
+    linear-gradient(165deg, color-mix(in srgb, var(--c) 52%, #1c1208), color-mix(in srgb, var(--c) 40%, #000 44%) 66%);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06);
 }
+.card-tex {
+  position: absolute; inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+  mix-blend-mode: overlay; opacity: 0.35; pointer-events: none;
+}
+.card-gloss {
+  position: absolute; inset: 0;
+  background: linear-gradient(115deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.05) 24%, transparent 42%);
+  mix-blend-mode: screen; pointer-events: none;
+}
+.card-emblem {
+  width: 50px; height: 50px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 28px; color: #f2ead8; position: relative; z-index: 1;
+  background: radial-gradient(circle at 34% 28%, rgba(255,255,255,0.16), rgba(0,0,0,0.28) 72%);
+  border: 1px solid color-mix(in srgb, var(--c) 70%, #fff 8%);
+  box-shadow:
+    inset 0 1px 3px rgba(255,255,255,0.22),
+    0 2px 7px rgba(0,0,0,0.45),
+    0 0 14px color-mix(in srgb, var(--c) 55%, transparent);
+}
+.card-fam {
+  font-size: 13px; font-weight: 700; letter-spacing: 1px;
+  position: relative; z-index: 1; text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+}
+.card-type {
+  font-size: 10px; line-height: 1.6; padding: 0 8px; border-radius: 999px;
+  position: relative; z-index: 1;
+  display: inline-flex; align-items: center; gap: 3px;
+  background: rgba(0,0,0,0.38); border: 1px solid rgba(255,255,255,0.14); color: rgba(242,234,216,0.85);
+}
+.card-type .ico { font-size: 10px; }
+.card-weight {
+  position: absolute; top: -5px; right: -5px; z-index: 2;
+  background: #ffd966; color: #1a1a1a; font-size: 10px; font-weight: 700;
+  border-radius: 999px; padding: 1px 6px; box-shadow: 0 1px 4px rgba(0,0,0,0.5);
+}
+
+/* 类型差异化（外框/内衬/纹章仍为家族色） */
+.card-noble .card-frame::after {
+  content: ''; position: absolute; top: -30%; left: -70%;
+  width: 45%; height: 160%;
+  background: linear-gradient(100deg, transparent, rgba(255,255,255,0.5) 50%, transparent);
+  transform: skewX(-22deg);
+  animation: card-sheen 3.2s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes card-sheen { 0%, 55% { left: -70%; } 100% { left: 135%; } }
+.card-assassin .card-tex {
+  background-image: repeating-linear-gradient(45deg, rgba(0,0,0,0.28) 0 2px, transparent 2px 6px);
+  opacity: 0.6;
+}
+.card-guard .card-frame { box-shadow: inset 0 0 0 1.5px #e8edf3, inset 0 0 0 1.5px #2e3a4d; }
+.card-assassin .card-type { background: rgba(192,57,43,0.32); border-color: rgba(192,57,43,0.7); color: #ffd9d4; }
+.card-spy .card-type { background: rgba(124,141,181,0.28); border-color: rgba(124,141,181,0.62); color: #d4dcf0; }
+.card-noble .card-type { background: rgba(212,160,23,0.32); border-color: rgba(212,160,23,0.72); color: #ffecb3; }
+.card-guard .card-type { background: rgba(154,164,178,0.28); border-color: rgba(154,164,178,0.62); color: #e8edf3; }
+
+/* 牌背（间谍背面 / 牌堆） */
+.card-back {
+  --c: #7c8db5;
+  background: linear-gradient(160deg, #3d4f74, #23304d 45%, #161f36 70%, #2b3a5c);
+}
+.card-back .card-frame {
+  background:
+    radial-gradient(130% 90% at 28% 16%, rgba(255,255,255,0.08), transparent 52%),
+    repeating-linear-gradient(45deg, rgba(255,255,255,0.035) 0 4px, transparent 4px 8px),
+    linear-gradient(165deg, #26334f, #141c30 66%);
+  box-shadow: inset 0 0 0 1px rgba(160,180,220,0.25);
+}
+.card-back .card-emblem { color: #aebbd4; border-color: rgba(160,180,220,0.45); }
 
 /* ========== 结束结算 ========== */
 .gameover-box {
@@ -314,39 +402,35 @@ label input, label select {
 .fate-neutral .fate-badge { color: #cfcfcf; }
 .fate-nums { opacity: 0.6; font-variant-numeric: tabular-nums; }
 
-/* ========== 区域小牌 ========== */
-.mini {
-  width: var(--mini-w); height: var(--mini-h); border-radius: 6px;
-  background: linear-gradient(160deg, color-mix(in srgb, var(--c) 50%, #1a1a1a), #1c1c1c);
-  border: 1px solid var(--c);
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
-  font-size: 10px; position: relative; user-select: none;
+/* ========== 区域小牌（复用大卡结构，仅按比例缩小） ========== */
+.card-mini {
+  width: var(--mini-w); height: var(--mini-h);
+  padding: 1px; border-radius: 7px;
 }
-.mini-fam { font-size: 18px; line-height: 1; }
-.mini-type { font-size: 10px; opacity: 0.9; }
-.mini-weight {
-  position: absolute; top: -4px; right: -4px;
-  background: #ffd966; color: #1a1a1a; font-size: 9px; font-weight: 700;
-  border-radius: 999px; padding: 0 4px;
-}
-.mini-noble { box-shadow: inset 0 0 0 2px var(--c); }
-.mini-guard { border-width: 3px; border-style: double; }
-.mini-disabled { opacity: 0.45; cursor: not-allowed; }
-.mini[role="button"] { cursor: pointer; transition: transform 0.1s; }
-.mini[role="button"]:hover { transform: translateY(-3px); }
-.mini-back {
-  background: repeating-linear-gradient(45deg, #2b3a55, #2b3a55 4px, #22304a 4px, #22304a 8px);
-  border: 1px solid #4a5f80; color: #aebbd4;
-}
-.mini-back-mark { font-size: 20px; font-weight: 700; }
+.card-mini .card-frame { border-radius: 6px; gap: 1px; }
+.card-mini .card-emblem { width: 26px; height: 26px; font-size: 15px; }
+.card-mini .card-fam { font-size: 8px; letter-spacing: 0.5px; }
+.card-mini .card-type { font-size: 7px; padding: 0 4px; gap: 1px; line-height: 1.4; }
+.card-mini .card-type .ico { font-size: 7px; }
+.card-mini .card-weight { top: -3px; right: -3px; font-size: 7px; padding: 0 3px; }
+.card-mini:hover { transform: translateY(-3px); }
+.card-disabled { opacity: 0.45; cursor: not-allowed; }
 
-/* 手牌类型与权重 */
-.card-type { font-size: 11px; opacity: 0.9; }
-.card-weight {
-  position: absolute; top: -6px; right: -6px;
-  background: #ffd966; color: #1a1a1a; font-size: 10px; font-weight: 700;
-  border-radius: 999px; padding: 1px 6px; line-height: 1.3;
+/* ========== 动效 ========== */
+/* 新牌进入：弹入 + 淡入 */
+@keyframes card-enter {
+  from { opacity: 0; transform: scale(0.5) translateY(-8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
 }
+.card.card-enter { animation: card-enter 0.35s cubic-bezier(0.34, 1.56, 0.64, 1); }
+
+/* 间谍翻开：3D 翻转 */
+@keyframes card-flip {
+  from { transform: rotateY(180deg); }
+  to { transform: rotateY(0deg); }
+}
+.board-col, .territory-cards { perspective: 600px; }
+.card.card-flip { animation: card-flip 0.6s ease; }
 
 /* 刺客结算面板 */
 .assassin-title { font-size: 13px; color: #ffd966; margin-bottom: 8px; }
@@ -378,8 +462,8 @@ label input, label select {
   .players .territory { flex: 1 1 calc(50% - 10px); min-width: 140px; }
 
   /* 卡牌与小牌内容同步缩小 */
-  .card-icon { font-size: 26px; }
-  .mini-fam { font-size: 16px; }
+  .card-emblem { width: 42px; height: 42px; font-size: 24px; }
+  .card-mini .card-emblem { width: 22px; height: 22px; font-size: 13px; }
 
   /* 餐桌板收紧：7 列在小屏保持等分可放下 */
   .board-side { width: 20px; }
@@ -400,7 +484,6 @@ label input, label select {
   .setup-card { padding: 18px; }
 
   .board-head-name { font-size: 11px; }
-  .mini-type { font-size: 9px; }
   .card-fam { font-size: 12px; }
   .card-type { font-size: 10px; }
 
@@ -413,15 +496,16 @@ label input, label select {
 
 /* 触屏设备：取消悬停位移，避免点按后卡片“卡住”抬起 */
 @media (hover: none) {
-  .card:hover,
-  .card-noble:hover { transform: none; box-shadow: 0 2px 6px rgba(0,0,0,0.3); }
-  .mini[role="button"]:hover { transform: none; }
+  .card:hover { transform: none; }
+  .card-mini:hover { transform: none; }
 }
 
-/* 系统偏好「减少动态效果」时停用呼吸发光，仅保留静态描边 */
+/* 系统偏好「减少动态效果」时停用呼吸发光与流光，仅保留静态描边 */
 @media (prefers-reduced-motion: reduce) {
   .territory.active {
     animation: none;
     box-shadow: 0 0 0 1px rgba(255,217,102,0.45), 0 0 20px rgba(255,217,102,0.45);
   }
+  .card-noble .card-frame::after { animation: none; }
+  .card.card-enter, .card.card-flip { animation: none; }
 }

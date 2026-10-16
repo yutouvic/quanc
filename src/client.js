@@ -7,6 +7,7 @@ import { Client } from 'boardgame.io/client';
 import { SocketIO } from 'boardgame.io/multiplayer';
 import { QuancGame, computeFamilyFates, pLabel } from './game.js';
 import { FAMILIES, getFamily } from './cards.js';
+import { FAMILY_ICONS, TYPE_ICONS, BACK_EMBLEM } from './icons.js';
 
 const GAME_NAME = QuancGame.name;
 const API_BASE = `${window.location.protocol}//${window.location.host}`;
@@ -20,6 +21,9 @@ let currentMatchID = null;   // 当前对局 ID（用于展示与复制）
 let roomInfo = null;         // 当前房间信息 { matchID, playerID, credentials }
 let inGameScreen = false;    // 当前是否已切换到游戏界面
 let currentPlayerName = '';  // 当前玩家昵称（用于恢复会话时回填）
+let seenCardIds = new Set(); // 已出现过的卡牌 id，用于给新牌播放进入动画
+let prevEnded = false;       // 上一帧是否已结束（用于一次性触发翻牌/得分滚动）
+let justEnded = false;       // 本帧是否为游戏结束瞬间
 
 // ---------- 基础工具 ----------
 
@@ -43,6 +47,37 @@ function el(tag, attrs = {}, children = []) {
     node.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
   }
   return node;
+}
+
+/** 将纹章 SVG 字符串注入为 .ico 容器（颜色/尺寸由 CSS 控制）。 */
+function svgNode(svg) {
+  const span = document.createElement('span');
+  span.className = 'ico';
+  if (svg) span.innerHTML = svg;
+  return span;
+}
+
+/** 标记新出现的牌：首次渲染时返回 true（用于播放进入动画）。 */
+function markNew(card) {
+  if (card && card.id && !seenCardIds.has(card.id)) {
+    seenCardIds.add(card.id);
+    return true;
+  }
+  return false;
+}
+
+/** 结算分数从 0 滚动到目标值。 */
+function animateScore(el, target) {
+  const start = performance.now();
+  const dur = 700;
+  function tick(now) {
+    const p = Math.min((now - start) / dur, 1);
+    const eased = 1 - Math.pow(1 - p, 3);
+    el.textContent = `${Math.round(target * eased)} 分`;
+    if (p < 1) requestAnimationFrame(tick);
+    else el.textContent = `${target} 分`;
+  }
+  requestAnimationFrame(tick);
 }
 
 // ---------- 大厅：创建 / 加入 / 离开对局 ----------
@@ -124,16 +159,26 @@ function fateLabel(fate) {
 
 /** 手牌（较大）：家族 + 类型，间谍在自己手中可见 */
 function handCardNode(card, { onClick, selected = false } = {}) {
-  const cls = ['card'];
-  if (card.type === 'noble') cls.push('card-noble');
+  const cls = ['card', `card-${card.type}`];
   if (selected) cls.push('card-selected');
+  if (markNew(card)) cls.push('card-enter');
   const f = getFamily(card.family) || { name: card.familyName, icon: '', color: '#888' };
   const attrs = { class: cls.join(' '), style: `--c:${f.color}` };
   if (onClick) { attrs.role = 'button'; attrs.tabindex = '0'; attrs.onClick = onClick; }
+
+  const typeSvg = TYPE_ICONS[card.type];
+  const typeKids = [];
+  if (typeSvg) typeKids.push(svgNode(typeSvg));
+  typeKids.push(el('span', { text: card.typeName }));
+
   const kids = [
-    el('div', { class: 'card-icon', text: f.icon }),
-    el('div', { class: 'card-fam', text: f.name }),
-    el('div', { class: 'card-type', text: `${card.typeIcon} ${card.typeName}` }),
+    el('div', { class: 'card-frame' }, [
+      el('div', { class: 'card-tex' }),
+      el('div', { class: 'card-gloss' }),
+      el('div', { class: 'card-emblem' }, [svgNode(FAMILY_ICONS[card.family])]),
+      el('div', { class: 'card-fam', text: f.name }),
+      el('div', { class: 'card-type' }, typeKids),
+    ]),
   ];
   if (card.type === 'noble') kids.push(el('div', { class: 'card-weight', text: '×2' }));
   return el('div', attrs, kids);
@@ -141,26 +186,46 @@ function handCardNode(card, { onClick, selected = false } = {}) {
 
 /** 区域小牌：间谍背面显示为牌背（传入 onClick 时牌背同样可点，用于刺客移除间谍） */
 function miniCardNode(card, { onClick, disabled = false, title = '' } = {}) {
+  // 小牌复用大卡结构（card-frame/tex/gloss/emblem/fam/type），仅加 card-mini 缩放
   if (card.faceDown) {
+    const cls = ['card', 'card-mini', 'card-back'];
+    if (disabled) cls.push('card-disabled');
+    if (markNew(card)) cls.push('card-enter');
     const attrs = {
-      class: `mini mini-back${disabled ? ' mini-disabled' : ''}`,
+      class: cls.join(' '),
       title: title || '间谍（背面，游戏结束时翻开）',
     };
     if (onClick && !disabled) { attrs.role = 'button'; attrs.tabindex = '0'; attrs.onClick = onClick; }
-    return el('div', attrs, [el('span', { class: 'mini-back-mark', text: '?' })]);
+    return el('div', attrs, [
+      el('div', { class: 'card-frame' }, [
+        el('div', { class: 'card-tex' }),
+        el('div', { class: 'card-emblem' }, [svgNode(BACK_EMBLEM)]),
+      ]),
+    ]);
   }
   const f = getFamily(card.family) || { name: card.familyName, icon: '', color: '#888' };
-  const cls = ['mini'];
-  if (card.type === 'noble') cls.push('mini-noble');
-  if (card.type === 'guard') cls.push('mini-guard');
-  if (disabled) cls.push('mini-disabled');
+  const cls = ['card', 'card-mini', `card-${card.type}`];
+  if (disabled) cls.push('card-disabled');
+  if (markNew(card)) cls.push('card-enter');
+  if (justEnded && card.type === 'spy') cls.push('card-flip');
   const attrs = { class: cls.join(' '), style: `--c:${f.color}`, title };
   if (onClick && !disabled) { attrs.role = 'button'; attrs.tabindex = '0'; attrs.onClick = onClick; }
+
+  const typeSvg = TYPE_ICONS[card.type];
+  const typeKids = [];
+  if (typeSvg) typeKids.push(svgNode(typeSvg));
+  typeKids.push(el('span', { text: card.typeName }));
+
   const kids = [
-    el('span', { class: 'mini-fam', text: f.icon }),
-    el('span', { class: 'mini-type', text: `${card.typeIcon}${card.typeName}` }),
+    el('div', { class: 'card-frame' }, [
+      el('div', { class: 'card-tex' }),
+      el('div', { class: 'card-gloss' }),
+      el('div', { class: 'card-emblem' }, [svgNode(FAMILY_ICONS[card.family])]),
+      el('div', { class: 'card-fam', text: f.name }),
+      el('div', { class: 'card-type' }, typeKids),
+    ]),
   ];
-  if (card.type === 'noble') kids.push(el('span', { class: 'mini-weight', text: '×2' }));
+  if (card.type === 'noble') kids.push(el('div', { class: 'card-weight', text: '×2' }));
   return el('div', attrs, kids);
 }
 
@@ -275,7 +340,7 @@ function renderTable(G, fates) {
   const headCells = cols.map((col) => {
     if (col.kind === 'spy') {
       return el('div', { class: 'board-head-cell board-head-spy' }, [
-        el('span', { class: 'chip-icon', text: '🕵️' }),
+        el('span', { class: 'chip-icon' }, [svgNode(TYPE_ICONS.spy)]),
         el('span', { class: 'board-head-name', text: '间谍' }),
         el('span', { class: 'fate-badge board-head-sub', text: '未翻开' }),
       ]);
@@ -283,7 +348,7 @@ function renderTable(G, fates) {
     const f = col.family;
     const lbl = fateLabel(fates[f.id].fate);
     return el('div', { class: `board-head-cell ${lbl.cls}`, style: `--c:${f.color}` }, [
-      el('span', { class: 'chip-icon', text: f.icon }),
+      el('span', { class: 'chip-icon' }, [svgNode(FAMILY_ICONS[f.id])]),
       el('span', { class: 'board-head-name', text: f.name }),
       el('span', { class: 'fate-badge', text: lbl.text }),
     ]);
@@ -468,16 +533,20 @@ function renderGameover(ctx) {
     class: 'go-summary',
     text: `获胜者：${winners.map(w => playerNameText(w, nicknames)).join('、')}`,
   }));
-  const rows = Object.keys(scores).map(id => el('div', { class: 'go-row' }, [
-    el('span', { text: playerNameText(id, nicknames) }),
-    el('span', { class: 'go-score', text: `${scores[id]} 分` }),
-  ]));
+  const rows = Object.keys(scores).map(id => {
+    const scoreEl = el('span', { class: 'go-score', text: `${justEnded ? 0 : scores[id]} 分` });
+    if (justEnded) animateScore(scoreEl, scores[id]);
+    return el('div', { class: 'go-row' }, [
+      el('span', { text: playerNameText(id, nicknames) }),
+      scoreEl,
+    ]);
+  });
   box.appendChild(el('div', { class: 'go-scores' }, rows));
   const fateRows = FAMILIES.map(f => {
     const info = fates[f.id];
     const lbl = fateLabel(info.fate);
     return el('div', { class: `fate-item ${lbl.cls}`, style: `--c:${f.color}` }, [
-      el('span', { class: 'chip-icon', text: f.icon }),
+      el('span', { class: 'chip-icon' }, [svgNode(FAMILY_ICONS[f.id])]),
       el('span', { class: 'chip-name', text: f.name }),
       el('span', { class: 'fate-badge', text: lbl.text }),
       el('span', { class: 'fate-nums', text: `+${info.favored}/-${info.disfavored}` }),
@@ -490,6 +559,8 @@ function render(state) {
   if (!state) return;
   currentState = state;
   const { G, ctx, playerID } = state;
+  justEnded = !!ctx.gameover && !prevEnded;
+  prevEnded = !!ctx.gameover;
   const fates = computeFamilyFates(G.table);
   renderHeader(G);
   renderPlayers(G, ctx, playerID, fates);
@@ -704,6 +775,9 @@ function enterRoom(matchID, playerID, credentials, playerName) {
   inGameScreen = false;
   currentState = null;
   selectedIndex = null;
+  seenCardIds.clear();
+  prevEnded = false;
+  justEnded = false;
   currentMatchID = matchID;
   showLobbyScreen();
   renderLobby(null);
@@ -762,6 +836,9 @@ function resetToSetup(message) {
   }
   currentState = null;
   selectedIndex = null;
+  seenCardIds.clear();
+  prevEnded = false;
+  justEnded = false;
   currentMatchID = null;
   roomInfo = null;
   inGameScreen = false;
@@ -881,6 +958,12 @@ function bindGameEvents() {
   $('#end-game-btn').addEventListener('click', () => {
     if (!roomInfo || roomInfo.playerID !== '0') return; // 仅房主可结束
     if (!window.confirm('确定要结束本局吗？本局信息将被清除，且不做结算。')) return;
+    // 游戏已结束（ctx.gameover 已生成）后，boardgame.io 会拒绝所有 move，
+    // endGame 无法再广播，此时直接退回设置界面即可。
+    if (currentState && currentState.ctx && currentState.ctx.gameover) {
+      resetToSetup('本局已结束，本局信息已清除，可重新创建或加入对局。');
+      return;
+    }
     // 通过 move 广播给房间内所有玩家，所有客户端（含房主）统一退出游戏页
     client.moves.endGame();
   });
