@@ -1,0 +1,41 @@
+# 依赖
+node_modules/
+
+# 构建产物
+public/client.js
+dist/
+build/
+
+# 环境变量
+.env
+.env.*
+!.env.example
+
+# 日志
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# 操作系统
+.DS_Store
+Thumbs.db
+
+# IDE / 编辑器
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Claude Code 本地状态
+.claude/
+
+# 测试覆盖率
+coverage/
+
+# 缓存
+.eslintcache
+.cache/
+.tmp/

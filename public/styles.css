@@ -1,0 +1,427 @@
+/* ========== 基础重置 ========== */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  /* 卡牌尺寸变量：响应式断点中按需缩小 */
+  --card-w: 76px; --card-h: 104px;
+  --mini-w: 46px; --mini-h: 62px;
+  --screen-pad: 20px;
+}
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  background: linear-gradient(135deg, #10322b 0%, #1a5e49 100%);
+  color: #f0f0f0;
+  min-height: 100vh;
+  overflow-x: hidden;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* ========== 通用 ========== */
+.screen {
+  max-width: 1240px; margin: 0 auto; padding: var(--screen-pad);
+  /* 刘海屏底部安全区 */
+  padding-bottom: calc(var(--screen-pad) + env(safe-area-inset-bottom));
+}
+h1 { font-size: 26px; margin-bottom: 6px; }
+.subtitle { opacity: 0.7; margin-bottom: 28px; }
+.btn {
+  padding: 9px 16px; border: none; border-radius: 8px;
+  background: #3a3a3a; color: #fff; font-size: 14px; cursor: pointer;
+  transition: background 0.15s, transform 0.05s;
+}
+.btn:hover { background: #4a4a4a; }
+.btn:active { transform: translateY(1px); }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-primary { background: #d4a017; color: #1a1a1a; font-weight: 600; }
+.btn-primary:hover { background: #e0b020; }
+.btn-sm { padding: 6px 12px; font-size: 13px; }
+.btn-favored { background: #2f7d4f; }
+.btn-favored:hover { background: #37955e; }
+.btn-disfavored { background: #8a3b3b; }
+.btn-disfavored:hover { background: #a34747; }
+label { display: block; margin-bottom: 14px; font-size: 14px; opacity: 0.85; }
+label input, label select {
+  display: block; width: 100%; margin-top: 6px;
+  padding: 9px 12px; border-radius: 6px; border: 1px solid #555;
+  background: #2a2a2a; color: #fff; font-size: 14px;
+}
+.empty-hint { opacity: 0.55; font-size: 13px; }
+
+/* ========== 设置界面 ========== */
+.setup-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px; margin-bottom: 24px;
+}
+.setup-grid:has(.setup-card:only-child) { max-width: 420px; margin-left: auto; margin-right: auto; }
+.setup-card { background: rgba(255,255,255,0.06); padding: 24px; border-radius: 12px; }
+.setup-card h2 { margin-bottom: 18px; font-size: 18px; }
+.join-row { display: flex; gap: 10px; }
+.join-row input { flex: 1; min-width: 0; }
+.join-row .btn { flex: 0 0 auto; white-space: nowrap; }
+#create-btn { width: 100%; margin-top: 4px; }
+.status { min-height: 24px; color: #ffd966; font-size: 14px; }
+.hint-msg { margin-top: 16px; font-size: 13px; opacity: 0.6; }
+
+/* ========== 房间等待界面 ========== */
+.room-card {
+  max-width: 720px; margin: 0 auto;
+  background: rgba(255,255,255,0.06); border-radius: 12px; padding: 24px;
+}
+.room-head {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 12px; flex-wrap: wrap; margin-bottom: 20px;
+}
+.room-count { font-size: 14px; color: #ffd966; white-space: nowrap; }
+.seats {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px; margin-bottom: 22px;
+}
+.seat {
+  border-radius: 10px; padding: 12px 14px;
+  border: 1px solid rgba(255,255,255,0.18);
+  background: rgba(0,0,0,0.2);
+  display: flex; flex-direction: column; gap: 6px;
+}
+.seat-filled { border-color: rgba(90,200,130,0.55); background: rgba(47,125,79,0.14); }
+.seat-filled.ready { box-shadow: inset 0 0 0 1px rgba(90,200,130,0.45); }
+.seat-empty { border-style: dashed; opacity: 0.75; }
+.seat-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.seat-no { font-size: 12px; opacity: 0.7; }
+.seat-name { font-size: 15px; font-weight: 600; }
+.seat-empty .seat-name { opacity: 0.55; font-weight: 400; }
+.seat-state { display: flex; align-items: center; gap: 6px; font-size: 12px; opacity: 0.85; }
+.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.dot-on { background: #5fd08a; box-shadow: 0 0 6px rgba(95,208,138,0.8); }
+.dot-off { background: #e0a23a; }
+.dot-empty { background: #666; }
+.badge {
+  font-size: 10px; padding: 1px 7px; border-radius: 999px;
+  font-weight: 700; letter-spacing: 0.5px;
+}
+.badge-host { background: #d4a017; color: #1a1a1a; }
+.badge-me { background: #4a7cc9; color: #fff; }
+.room-action { min-height: 40px; display: flex; align-items: center; margin-bottom: 14px; }
+.room-hint { font-size: 14px; opacity: 0.8; }
+.room-ready-hint { color: #7fe0a3; }
+.btn-start { font-size: 15px; padding: 10px 28px; }
+.btn-leave { background: #5a3030; }
+.btn-leave:hover { background: #6e3a3a; }
+
+/* ========== 游戏界面布局 ========== */
+.game-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+.game-header-right { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: flex-end; }
+.deck-info { font-size: 14px; opacity: 0.85; }
+
+/* 对局 ID 展示 */
+.match-info { display: flex; align-items: center; gap: 6px; font-size: 13px; opacity: 0.9; }
+.match-id {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: rgba(255,255,255,0.08); border-radius: 6px;
+  padding: 2px 8px; color: #ffd966; letter-spacing: 0.5px;
+}
+.game-layout {
+  display: grid; grid-template-columns: 1fr; gap: 14px; margin-bottom: 14px;
+  align-items: start;
+}
+/* 日志区域隐藏（数据仍在 G.log 中保留，仅不显示） */
+.log { display: none; }
+.label {
+  font-size: 12px; opacity: 0.7; margin-bottom: 8px;
+  text-transform: uppercase; letter-spacing: 1px;
+}
+
+/* ========== 玩家领地 ========== */
+.players { display: flex; flex-direction: row; flex-wrap: wrap; gap: 10px; }
+.players .territory { flex: 1 1 220px; min-width: 220px; }
+.territory {
+  background: rgba(0,0,0,0.2); border-radius: 12px; padding: 10px 12px;
+  border: 2px solid transparent;
+  position: relative; /* 供「当前回合」角标定位 */
+}
+.territory.me { background: rgba(212,160,23,0.14); }
+/* 当前回合玩家：加粗金色描边 + 呼吸式外发光 + 角标，一眼可辨 */
+.territory.active {
+  border: 3px solid #ffd966;
+  background: rgba(255,217,102,0.1);
+  animation: turn-glow 1.8s ease-in-out infinite;
+}
+.territory.active::after {
+  content: '当前回合';
+  position: absolute; top: -11px; right: 10px;
+  background: #ffd966; color: #1a1a1a;
+  font-size: 11px; font-weight: 700; line-height: 1.5;
+  padding: 0 8px; border-radius: 999px; white-space: nowrap;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+}
+@keyframes turn-glow {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(255,217,102,0.3), 0 0 14px rgba(255,217,102,0.3); }
+  50% { box-shadow: 0 0 0 1px rgba(255,217,102,0.55), 0 0 26px rgba(255,217,102,0.6); }
+}
+.territory-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+.territory-name { font-weight: 600; font-size: 14px; }
+.territory-score { font-size: 12px; color: #ffd966; }
+.territory-cards { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* ========== 家族标签 ========== */
+.chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: color-mix(in srgb, var(--c) 30%, #1c1c1c);
+  border: 1px solid var(--c);
+  border-radius: 999px; padding: 3px 9px; font-size: 12px;
+}
+.chip-icon { font-size: 14px; }
+.chip-name { font-weight: 600; }
+.chip-count { opacity: 0.8; }
+
+/* ========== 餐桌（家族列板） ========== */
+.table-wrap { background: rgba(0,0,0,0.2); border-radius: 12px; padding: 14px; }
+.table { display: flex; flex-direction: column; gap: 12px; }
+.table-board { display: flex; flex-direction: column; gap: 8px; overflow-x: auto; }
+
+/* 牌行：左侧竖排区名 + 7 列网格 */
+.board-row { display: flex; gap: 6px; }
+.board-side {
+  width: 26px; flex: none;
+  display: flex; align-items: center; justify-content: center;
+}
+.board-side span {
+  writing-mode: vertical-rl; letter-spacing: 3px;
+  font-size: 12px; font-weight: 700; opacity: 0.9;
+}
+.board-side-favored span { color: #7fe0a3; }
+.board-side-disfavored span { color: #f08f8f; }
+
+.board-grid {
+  flex: 1; min-width: 0;
+  display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px;
+}
+
+/* 家族列：得宠列从计分板向上叠放，失宠列向下叠放 */
+.board-col {
+  --c: #888;
+  display: flex; flex-direction: row; flex-wrap: wrap-reverse;
+  justify-content: center; align-content: flex-start;
+  gap: 4px; min-height: 68px; padding: 4px;
+  border-radius: 8px;
+  border: 1px dashed color-mix(in srgb, var(--c) 45%, transparent);
+  background: color-mix(in srgb, var(--c) 7%, transparent);
+}
+.board-col-disfavored { flex-wrap: wrap; }
+.board-col-spy {
+  --c: #7c8db5;
+  border-style: solid;
+  background: rgba(124,141,181,0.07);
+}
+
+/* 中间共享家族计分板 */
+.board-head-cell {
+  display: flex; flex-direction: column; align-items: center; gap: 1px;
+  padding: 5px 2px 6px;
+  border-radius: 8px; border: 1px solid color-mix(in srgb, var(--c) 60%, transparent);
+  background: color-mix(in srgb, var(--c) 14%, transparent);
+}
+.board-head-name { font-size: 12px; font-weight: 700; }
+.board-head-cell .fate-badge { font-size: 10px; }
+.board-head-cell.fate-neutral { opacity: 0.8; }
+.board-head-spy {
+  --c: #7c8db5; border-style: solid;
+  background: rgba(124,141,181,0.1);
+}
+.board-head-sub { color: #aebbd4; font-weight: 400; opacity: 0.8; }
+
+/* 家族命运状态强化：实心徽章胶囊（计分板本体保持家族配色） */
+.board-head-cell .fate-badge {
+  margin-top: 2px; padding: 1px 8px; border-radius: 999px;
+  font-size: 11px; line-height: 1.4;
+}
+.board-head-cell.fate-favored .fate-badge { background: #2f7d4f; color: #eafff2; box-shadow: 0 1px 4px rgba(0,0,0,0.4); }
+.board-head-cell.fate-disfavored .fate-badge { background: #8a3b3b; color: #ffeaea; box-shadow: 0 1px 4px rgba(0,0,0,0.4); }
+.board-head-cell.fate-neutral .fate-badge { background: rgba(255,255,255,0.1); color: #cfcfcf; }
+.board-head-cell.fate-favored .fate-badge::before { content: '▲'; margin-right: 3px; font-size: 8px; }
+.board-head-cell.fate-disfavored .fate-badge::before { content: '▼'; margin-right: 3px; font-size: 8px; }
+
+/* ========== 日志 ========== */
+.log {
+  background: rgba(0,0,0,0.2); border-radius: 12px; padding: 12px;
+  max-height: 360px; overflow-y: auto; font-size: 12px; line-height: 1.6;
+}
+.log-line { padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+.log-line:last-child { border-bottom: none; }
+
+/* ========== 手牌与操作 ========== */
+.hand-wrap { background: rgba(0,0,0,0.2); border-radius: 12px; padding: 14px; }
+.hand { display: flex; gap: 10px; flex-wrap: wrap; min-height: calc(var(--card-h) + 2px); margin-bottom: 12px; }
+.play-panel { display: flex; flex-direction: column; gap: 8px; }
+.dest-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.dest-title { font-size: 12px; opacity: 0.7; min-width: 96px; }
+.dest-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ========== 家族卡牌 ========== */
+.card {
+  width: var(--card-w); height: var(--card-h); border-radius: 10px;
+  background: linear-gradient(160deg, color-mix(in srgb, var(--c) 55%, #1a1a1a), #1c1c1c);
+  border: 2px solid var(--c);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  cursor: pointer; user-select: none;
+  position: relative;
+  transition: transform 0.12s, box-shadow 0.12s;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+}
+.card:hover { transform: translateY(-6px); box-shadow: 0 8px 16px rgba(0,0,0,0.45); }
+.card.card-selected {
+  transform: translateY(-8px);
+  box-shadow: 0 0 0 3px #ffd966, 0 8px 18px rgba(0,0,0,0.5);
+}
+.card-icon { font-size: 30px; }
+.card-fam { font-size: 13px; font-weight: 700; }
+.card-sm { width: 56px; height: 78px; }
+.card-sm .card-icon { font-size: 22px; }
+.card-sm .card-fam { font-size: 11px; }
+
+/* 贵族大卡：与贵族小卡一致的家族色内描边（保留大卡投影） */
+.card-noble { box-shadow: inset 0 0 0 2px var(--c), 0 2px 6px rgba(0,0,0,0.3); }
+.card-noble:hover { box-shadow: inset 0 0 0 2px var(--c), 0 8px 16px rgba(0,0,0,0.45); }
+.card-noble.card-selected {
+  box-shadow: inset 0 0 0 2px var(--c), 0 0 0 3px #ffd966, 0 8px 18px rgba(0,0,0,0.5);
+}
+
+/* ========== 结束结算 ========== */
+.gameover-box {
+  background: rgba(212,160,23,0.14); border: 1px solid #d4a017;
+  border-radius: 12px; padding: 16px; margin-bottom: 14px;
+}
+.gameover-box h2 { font-size: 20px; margin-bottom: 8px; color: #ffd966; }
+.go-summary { margin-bottom: 10px; }
+.go-scores { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
+.go-row {
+  display: flex; flex-direction: column; gap: 2px;
+  background: rgba(0,0,0,0.25); border-radius: 8px; padding: 6px 12px; font-size: 13px;
+}
+.go-score { font-weight: 700; color: #ffd966; }
+
+/* 结算页家族命运一览 */
+.fate-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.fate-item {
+  display: inline-flex; align-items: center; gap: 5px;
+  border-radius: 8px; padding: 3px 8px; font-size: 12px;
+  border: 1px solid var(--c); background: rgba(255,255,255,0.04);
+}
+.fate-favored { box-shadow: inset 0 0 0 1px rgba(90,200,130,0.6); }
+.fate-disfavored { box-shadow: inset 0 0 0 1px rgba(220,120,120,0.6); }
+.fate-neutral { opacity: 0.75; }
+.fate-badge { font-weight: 700; }
+.fate-favored .fate-badge { color: #7fe0a3; }
+.fate-disfavored .fate-badge { color: #f08f8f; }
+.fate-neutral .fate-badge { color: #cfcfcf; }
+.fate-nums { opacity: 0.6; font-variant-numeric: tabular-nums; }
+
+/* ========== 区域小牌 ========== */
+.mini {
+  width: var(--mini-w); height: var(--mini-h); border-radius: 6px;
+  background: linear-gradient(160deg, color-mix(in srgb, var(--c) 50%, #1a1a1a), #1c1c1c);
+  border: 1px solid var(--c);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+  font-size: 10px; position: relative; user-select: none;
+}
+.mini-fam { font-size: 18px; line-height: 1; }
+.mini-type { font-size: 10px; opacity: 0.9; }
+.mini-weight {
+  position: absolute; top: -4px; right: -4px;
+  background: #ffd966; color: #1a1a1a; font-size: 9px; font-weight: 700;
+  border-radius: 999px; padding: 0 4px;
+}
+.mini-noble { box-shadow: inset 0 0 0 2px var(--c); }
+.mini-guard { border-width: 3px; border-style: double; }
+.mini-disabled { opacity: 0.45; cursor: not-allowed; }
+.mini[role="button"] { cursor: pointer; transition: transform 0.1s; }
+.mini[role="button"]:hover { transform: translateY(-3px); }
+.mini-back {
+  background: repeating-linear-gradient(45deg, #2b3a55, #2b3a55 4px, #22304a 4px, #22304a 8px);
+  border: 1px solid #4a5f80; color: #aebbd4;
+}
+.mini-back-mark { font-size: 20px; font-weight: 700; }
+
+/* 手牌类型与权重 */
+.card-type { font-size: 11px; opacity: 0.9; }
+.card-weight {
+  position: absolute; top: -6px; right: -6px;
+  background: #ffd966; color: #1a1a1a; font-size: 10px; font-weight: 700;
+  border-radius: 999px; padding: 1px 6px; line-height: 1.3;
+}
+
+/* 刺客结算面板 */
+.assassin-title { font-size: 13px; color: #ffd966; margin-bottom: 8px; }
+.assassin-candidates { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+
+/* ========== 响应式 ========== */
+/* 平板 / 大屏手机：缩小卡牌与间距、加大触控目标、头部纵向堆叠 */
+@media (max-width: 768px) {
+  :root {
+    --card-w: 66px; --card-h: 92px;
+    --mini-w: 40px; --mini-h: 54px;
+    --screen-pad: 12px;
+  }
+  h1 { font-size: 22px; }
+  .subtitle { margin-bottom: 20px; }
+
+  /* 头部纵向堆叠，避免对局信息挤压 */
+  .game-header { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .game-header-right { justify-content: flex-start; }
+
+  /* 触控目标加大，消除双击缩放延迟 */
+  .btn { min-height: 40px; touch-action: manipulation; }
+  .btn-sm { min-height: 36px; padding: 7px 13px; touch-action: manipulation; }
+
+  /* 输入框字号 ≥16px，避免 iOS 聚焦时自动放大页面 */
+  label input, label select { font-size: 16px; }
+
+  /* 领地两列排布 */
+  .players .territory { flex: 1 1 calc(50% - 10px); min-width: 140px; }
+
+  /* 卡牌与小牌内容同步缩小 */
+  .card-icon { font-size: 26px; }
+  .mini-fam { font-size: 16px; }
+
+  /* 餐桌板收紧：7 列在小屏保持等分可放下 */
+  .board-side { width: 20px; }
+  .board-side span { font-size: 11px; letter-spacing: 2px; }
+  .board-grid { gap: 4px; }
+  .board-col { gap: 3px; padding: 3px; min-height: 58px; }
+
+  .hand { gap: 8px; }
+}
+
+/* 手机：进一步压缩，操作按钮整行排列便于点按 */
+@media (max-width: 480px) {
+  :root { --card-w: 60px; --card-h: 84px; --mini-w: 36px; --mini-h: 50px; }
+
+  .table-wrap { padding: 10px; }
+  .hand-wrap { padding: 10px; }
+  .room-card { padding: 16px; }
+  .setup-card { padding: 18px; }
+
+  .board-head-name { font-size: 11px; }
+  .mini-type { font-size: 9px; }
+  .card-fam { font-size: 12px; }
+  .card-type { font-size: 10px; }
+
+  /* 出牌去向：标题独占一行，按钮等宽整行 */
+  .dest-row { flex-direction: column; align-items: stretch; gap: 6px; }
+  .dest-title { min-width: 0; }
+  .dest-buttons { flex-wrap: nowrap; }
+  .dest-buttons .btn { flex: 1 1 0; white-space: normal; }
+}
+
+/* 触屏设备：取消悬停位移，避免点按后卡片“卡住”抬起 */
+@media (hover: none) {
+  .card:hover,
+  .card-noble:hover { transform: none; box-shadow: 0 2px 6px rgba(0,0,0,0.3); }
+  .mini[role="button"]:hover { transform: none; }
+}
+
+/* 系统偏好「减少动态效果」时停用呼吸发光，仅保留静态描边 */
+@media (prefers-reduced-motion: reduce) {
+  .territory.active {
+    animation: none;
+    box-shadow: 0 0 0 1px rgba(255,217,102,0.45), 0 0 20px rgba(255,217,102,0.45);
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "name": "quanc-card-game",
+  "version": "0.1.0",
+  "description": "A 2-5 player turn-based card game built with boardgame.io",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "build": "esbuild src/client.js --bundle --format=esm --outfile=public/client.js",
+    "build:watch": "esbuild src/client.js --bundle --format=esm --outfile=public/client.js --watch",
+    "start": "npm run build && node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "keywords": [
+    "card-game",
+    "boardgame.io",
+    "turn-based",
+    "multiplayer"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "boardgame.io": "^0.50.2",
+    "koa-static": "^5.0.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  }
+}
