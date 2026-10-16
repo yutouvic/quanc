@@ -62,6 +62,20 @@ export function getFamily(id) {
 }
 
 /**
+ * 生成不泄露家族的卡牌 ID（对原始标识做确定性哈希）。
+ * 间谍牌正面（手牌）与背面（打出后）共用同一 ID，不能沿用
+ * `${family}-${type}-${index}` 这种会暴露家族的格式（如 lion-spy-0）。
+ */
+function opaqueId(seed) {
+  let h = 2166136261; // FNV-1a 初始偏移
+  for (let i = 0; i < seed.length; i++) {
+    h ^= seed.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return 'c' + (h >>> 0).toString(36);
+}
+
+/**
  * 创建一副 90 张的牌堆（6 家族 × 15 张）。
  * 卡牌结构：{ id, family, familyName, icon, color, type, typeName, typeIcon, weight }
  */
@@ -71,8 +85,9 @@ export function createDeck() {
     for (const comp of FAMILY_COMPOSITION) {
       const t = CARD_TYPES[comp.type];
       for (let i = 0; i < comp.count; i++) {
+        const rawId = `${f.id}-${comp.type}-${i}`;
         deck.push({
-          id: `${f.id}-${comp.type}-${i}`,
+          id: comp.type === 'spy' ? opaqueId(rawId) : rawId,
           family: f.id,
           familyName: f.name,
           icon: f.icon,

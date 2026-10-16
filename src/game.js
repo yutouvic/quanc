@@ -305,57 +305,63 @@ export const QuancGame = {
      * @param {number} handIndex
      * @param {string} destination - 'own' | 'opponent' | 'table'
      * @param {string} target - opponent 时为对方 playerID；table 时为 'favored' | 'disfavored'
+     *
+     * 采用长格式 move 并将 client 置为 false：出牌只由服务端结算，
+     * 避免客户端乐观更新把间谍牌以正面渲染出来（家族泄露）。
      */
-    playCard: ({ G, ctx, playerID }, handIndex, destination, target) => {
-      // 仅在正式游戏阶段可出牌
-      if (ctx.phase !== 'play') return INVALID_MOVE;
-      const player = G.players[playerID];
-      if (!player) return INVALID_MOVE;
-      if (typeof handIndex !== 'number' || handIndex < 0 || handIndex >= player.hand.length) {
-        return INVALID_MOVE;
-      }
-      // 有未结算的刺客效果时，需先结算
-      if (G.pendingAssassin) return INVALID_MOVE;
-      if (!G.turnUsed || typeof G.turnUsed[destination] !== 'boolean') return INVALID_MOVE;
-      if (G.turnUsed[destination]) return INVALID_MOVE;
+    playCard: {
+      client: false,
+      move: ({ G, ctx, playerID }, handIndex, destination, target) => {
+        // 仅在正式游戏阶段可出牌
+        if (ctx.phase !== 'play') return INVALID_MOVE;
+        const player = G.players[playerID];
+        if (!player) return INVALID_MOVE;
+        if (typeof handIndex !== 'number' || handIndex < 0 || handIndex >= player.hand.length) {
+          return INVALID_MOVE;
+        }
+        // 有未结算的刺客效果时，需先结算
+        if (G.pendingAssassin) return INVALID_MOVE;
+        if (!G.turnUsed || typeof G.turnUsed[destination] !== 'boolean') return INVALID_MOVE;
+        if (G.turnUsed[destination]) return INVALID_MOVE;
 
-      let card;
-      let location;
-      if (destination === 'own') {
-        card = player.hand.splice(handIndex, 1)[0];
-        player.territory.push({ ...card, playedBy: playerID });
-        G.turnUsed.own = true;
-        location = { kind: 'territory', owner: playerID };
-        G.log.push(`玩家 ${pLabel(playerID)} 将 ${describeCard(card)} 打入自己领地。`);
-      } else if (destination === 'opponent') {
-        const opp = G.players[target];
-        if (!opp || target === playerID) return INVALID_MOVE;
-        card = player.hand.splice(handIndex, 1)[0];
-        opp.territory.push({ ...card, playedBy: playerID });
-        G.turnUsed.opponent = true;
-        location = { kind: 'territory', owner: target };
-        G.log.push(`玩家 ${pLabel(playerID)} 将 ${describeCard(card)} 打入玩家 ${pLabel(target)} 的领地。`);
-      } else if (destination === 'table') {
-        const zone = target;
-        if (zone !== 'favored' && zone !== 'disfavored') return INVALID_MOVE;
-        card = player.hand.splice(handIndex, 1)[0];
-        G.table[zone].push({ ...card, playedBy: playerID });
-        G.turnUsed.table = true;
-        location = { kind: 'table', zone };
-        const zoneName = zone === 'favored' ? '得宠区' : '失宠区';
-        G.log.push(`玩家 ${pLabel(playerID)} 将 ${describeCard(card)} 打入餐桌${zoneName}。`);
-      } else {
-        return INVALID_MOVE;
-      }
+        let card;
+        let location;
+        if (destination === 'own') {
+          card = player.hand.splice(handIndex, 1)[0];
+          player.territory.push({ ...card, playedBy: playerID });
+          G.turnUsed.own = true;
+          location = { kind: 'territory', owner: playerID };
+          G.log.push(`玩家 ${pLabel(playerID)} 将 ${describeCard(card)} 打入自己领地。`);
+        } else if (destination === 'opponent') {
+          const opp = G.players[target];
+          if (!opp || target === playerID) return INVALID_MOVE;
+          card = player.hand.splice(handIndex, 1)[0];
+          opp.territory.push({ ...card, playedBy: playerID });
+          G.turnUsed.opponent = true;
+          location = { kind: 'territory', owner: target };
+          G.log.push(`玩家 ${pLabel(playerID)} 将 ${describeCard(card)} 打入玩家 ${pLabel(target)} 的领地。`);
+        } else if (destination === 'table') {
+          const zone = target;
+          if (zone !== 'favored' && zone !== 'disfavored') return INVALID_MOVE;
+          card = player.hand.splice(handIndex, 1)[0];
+          G.table[zone].push({ ...card, playedBy: playerID });
+          G.turnUsed.table = true;
+          location = { kind: 'table', zone };
+          const zoneName = zone === 'favored' ? '得宠区' : '失宠区';
+          G.log.push(`玩家 ${pLabel(playerID)} 将 ${describeCard(card)} 打入餐桌${zoneName}。`);
+        } else {
+          return INVALID_MOVE;
+        }
 
-      G.turnPlayCount += 1;
+        G.turnPlayCount += 1;
 
-      // 刺客：打出后进入待结算状态
-      if (card.type === 'assassin') {
-        G.pendingAssassin = { location, assassinCardId: card.id };
-        G.log.push(`玩家 ${pLabel(playerID)} 打出刺客：可移除区域内 1 张其他牌（守卫免疫），也可选择不发动。`);
-      }
-      return undefined;
+        // 刺客：打出后进入待结算状态
+        if (card.type === 'assassin') {
+          G.pendingAssassin = { location, assassinCardId: card.id };
+          G.log.push(`玩家 ${pLabel(playerID)} 打出刺客：可移除区域内 1 张其他牌（守卫免疫），也可选择不发动。`);
+        }
+        return undefined;
+      },
     },
 
     /**
