@@ -186,7 +186,7 @@ function handCardNode(card, { onClick, selected = false } = {}) {
 
 /** 区域小牌：间谍背面显示为牌背（传入 onClick 时牌背同样可点，用于刺客移除间谍） */
 function miniCardNode(card, { onClick, disabled = false, title = '' } = {}) {
-  // 小牌复用大卡结构（card-frame/tex/gloss/emblem/fam/type），仅加 card-mini 缩放
+  // 小牌复用大卡结构（保留家族徽章/名称与类型文字），加 card-mini 缩放
   if (card.faceDown) {
     const cls = ['card', 'card-mini', 'card-back'];
     if (disabled) cls.push('card-disabled');
@@ -211,10 +211,7 @@ function miniCardNode(card, { onClick, disabled = false, title = '' } = {}) {
   const attrs = { class: cls.join(' '), style: `--c:${f.color}`, title };
   if (onClick && !disabled) { attrs.role = 'button'; attrs.tabindex = '0'; attrs.onClick = onClick; }
 
-  const typeSvg = TYPE_ICONS[card.type];
-  const typeKids = [];
-  if (typeSvg) typeKids.push(svgNode(typeSvg));
-  typeKids.push(el('span', { text: card.typeName }));
+  const typeKids = [el('span', { text: card.typeName })];
 
   const kids = [
     el('div', { class: 'card-frame' }, [
@@ -302,7 +299,7 @@ function renderPlayers(G, ctx, playerID, fates) {
  * 餐桌渲染：
  * - 得宠区 / 失宠区共用中间一条家族计分板（只显示得宠状态，不显示数字）；
  * - 6 个家族按 FAMILIES 顺序从左到右成列；未翻开的间谍暂存最右侧间谍列；
- * - 游戏结束间谍翻开（带 family）后，自动归入对应的家族列，间谍列随之隐藏。
+ * - 游戏结束间谍翻开（带 family）后，自动归入对应的家族列，间谍列保留为空。
  */
 function renderTable(G, fates) {
   const container = $('#table');
@@ -319,20 +316,14 @@ function renderTable(G, fates) {
     disfavored: disfavored.filter(c => c.family === f.id),
   }));
 
-  // 间谍列仅收集尚未翻开的间谍（faceDown）；结束后翻开带 family，已归入家族列
-  const faceDownSpies = [
-    ...favored.filter(c => c.type === 'spy' && c.faceDown),
-    ...disfavored.filter(c => c.type === 'spy' && c.faceDown),
-  ];
-  if (faceDownSpies.length > 0) {
-    cols.push({
-      kind: 'spy',
-      favored: favored.filter(c => c.type === 'spy' && c.faceDown),
-      disfavored: disfavored.filter(c => c.type === 'spy' && c.faceDown),
-    });
-  }
+  // 间谍列始终显示；仅收集尚未翻开的间谍（faceDown），结束后翻开的间谍已归入家族列
+  cols.push({
+    kind: 'spy',
+    favored: favored.filter(c => c.type === 'spy' && c.faceDown),
+    disfavored: disfavored.filter(c => c.type === 'spy' && c.faceDown),
+  });
 
-  // 列数随是否含间谍列动态变化（结束后 6 列）
+  // 列数（间谍列始终存在，共 7 列）
   const gridStyle = `grid-template-columns: repeat(${cols.length}, minmax(0, 1fr))`;
 
   // 得宠（上）/ 失宠（下）牌行；得宠列 wrap-reverse 向上叠放，失宠列正常向下叠放
@@ -368,7 +359,7 @@ function renderTable(G, fates) {
   const board = el('div', { class: 'table-board' }, [
     cardsRow('favored', '得宠', 'board-side-favored'),
     el('div', { class: 'board-row' }, [
-      el('div', { class: 'board-side' }),
+      el('div', { class: 'board-side' }, [el('span', { text: '餐桌' })]),
       el('div', { class: 'board-grid board-head', style: gridStyle }, headCells),
     ]),
     cardsRow('disfavored', '失宠', 'board-side-disfavored'),
