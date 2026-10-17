@@ -66,7 +66,7 @@ export const TYPE_ICONS = {
   ),
   // 贵族：皇冠
   noble: svg(
-    '<path d="M5 8l4 4 3-5 3 5 4-4-1 8H6z"/>',
+    '<path d="M5 8l4 4 3-5 3 5 4-4-1 10H6z"/>',
   ),
   // 守卫：盾
   guard: svg(

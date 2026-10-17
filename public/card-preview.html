@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>卡牌预览 · Quanc</title>
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    .preview { max-width: 1240px; margin: 0 auto; padding: 20px; padding-bottom: calc(20px + env(safe-area-inset-bottom)); }
+    .preview h1 { font-size: 24px; margin-bottom: 4px; }
+    .preview .sub { opacity: 0.7; margin-bottom: 24px; font-size: 13px; }
+
+    .family-section { margin-bottom: 30px; }
+    .family-title {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 18px; font-weight: 700; margin-bottom: 14px;
+    }
+    .family-title .ico { font-size: 22px; }
+    .family-color { width: 10px; height: 10px; border-radius: 50%; }
+
+    .type-grid { display: flex; flex-wrap: wrap; gap: 22px; }
+    .type-cell { display: flex; flex-direction: column; gap: 8px; align-items: center; }
+    .type-name { font-size: 13px; font-weight: 600; opacity: 0.85; }
+    .card-pair { display: flex; flex-direction: column; gap: 12px; align-items: center; }
+  </style>
+</head>
+<body>
+  <div class="preview">
+    <h1>卡牌预览</h1>
+    <p class="sub">6 个家族 × 5 个类型（刺客 / 间谍 / 贵族 / 守卫 / 平民）· 每类含大卡与区域小卡</p>
+    <div id="preview"></div>
+  </div>
+
+  <script>
+    // 与 src/icons.js 一致的 SVG 模板与图标
+    const svg = (body) =>
+      `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
+
+    const FAMILIES = [
+      { id: 'lion', name: '狮族', color: '#d4a017' },
+      { id: 'eagle', name: '鹰族', color: '#5b8dd9' },
+      { id: 'wolf', name: '狼族', color: '#9aa4b2' },
+      { id: 'serpent', name: '蛇族', color: '#c2185b' },
+      { id: 'stag', name: '鹿族', color: '#4caf50' },
+      { id: 'bear', name: '熊族', color: '#8d5524' },
+    ];
+
+    const TYPES = [
+      { id: 'assassin', name: '刺客' },
+      { id: 'spy', name: '间谍' },
+      { id: 'noble', name: '贵族' },
+      { id: 'guard', name: '守卫' },
+      { id: 'plain', name: '平民' },
+    ];
+
+    const FAMILY_ICONS = {
+      lion: svg('<circle cx="12" cy="12.5" r="3.8"/><path d="M12 4.6v2M6.6 7l1.4 1.4M4.6 12.5H7M6.6 18l1.4-1.4M12 20.4v-2M17.4 18l-1.4-1.4M19.4 12.5H17M17.4 7 16 8.4"/>'),
+      eagle: svg('<path d="M12 6L11 10C7 9.5 3.5 9.5 2 10.5C1.8 12 3 13.8 5 14.2C8 14.8 10 14.8 11.5 14.5L12 18L12.5 14.5C14 14.8 16 14.8 19 14.2C21 13.8 22.2 12 22 10.5C20.5 9.5 17 9.5 13 10L12 6z"/>'),
+      wolf: svg('<path d="M12 3.5 6 8l5 1.5z"/><path d="M12 3.5 18 8l-5 1.5z"/><path d="M6.5 8h11L16 16.5 12 21.5 8 16.5z"/><circle cx="10" cy="12" r=".6" fill="currentColor" stroke="none"/><circle cx="14" cy="12" r=".6" fill="currentColor" stroke="none"/>'),
+      serpent: svg('<path d="M17 7.5c2.5 1 2.5 4 .5 5.5S8 11 7 14s1 5 4 5.5c1.5.3 3-.3 4-1.5"/><circle cx="18" cy="7.5" r="1.7"/>'),
+      stag: svg('<path d="M9.5 10.5 6.5 4.5 3.5 6M6.5 4.5 8 8.5"/><path d="M14.5 10.5 17.5 4.5 20.5 6M17.5 4.5 16 8.5"/><path d="M9.5 10.5h5l-1 9h-3z"/><circle cx="10.5" cy="13" r=".6" fill="currentColor" stroke="none"/><circle cx="13.5" cy="13" r=".6" fill="currentColor" stroke="none"/>'),
+      bear: svg('<circle cx="8.5" cy="8.5" r="2.6"/><circle cx="15.5" cy="8.5" r="2.6"/><circle cx="12" cy="14.5" r="5.5"/>'),
+    };
+
+    const TYPE_ICONS = {
+      assassin: svg('<path d="M12 3l4 7-4 5-4-5z"/><path d="M8 15h8"/><path d="M12 15v5"/><path d="M10 20h4"/>'),
+      spy: svg('<path d="M2 12s3.5-5.5 10-5.5S22 12 22 12s-3.5 5.5-10 5.5S2 12 2 12z"/><circle cx="12" cy="12" r="2.8"/>'),
+      noble: svg('<path d="M5 8l4 4 3-5 3 5 4-4-1 10H6z"/>'),
+      guard: svg('<path d="M12 3l8 3v6c0 4.5-3.2 6.5-8 9-4.8-2.5-8-4.5-8-9V6z"/><path d="M12 9l3 3-3 3-3-3z"/>'),
+    };
+
+    const BACK_EMBLEM = svg('<path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>');
+
+    // 卡牌背面（间谍背面 / 牌堆）：仅牌背 + 问号水印
+    function backCardNode(mini) {
+      const cls = mini ? 'card card-mini card-back' : 'card card-back';
+      return `<div class="${cls}">
+        <div class="card-frame">
+          <div class="card-tex"></div>
+          <div class="card-emblem"><span class="ico">${BACK_EMBLEM}</span></div>
+        </div>
+      </div>`;
+    }
+
+    // 生成卡牌 DOM（大卡含类型 SVG，小卡仅类型文字）
+    function cardNode(family, type, mini) {
+      const cls = ['card'];
+      if (mini) cls.push('card-mini');
+      cls.push(`card-${type.id}`);
+      const typeSvg = TYPE_ICONS[type.id] || '';
+      const typeInner = mini
+        ? `<span>${type.name}</span>`
+        : `${typeSvg ? `<span class="ico">${typeSvg}</span>` : ''}<span>${type.name}</span>`;
+      const weight = type.id === 'noble' ? '<div class="card-weight">×2</div>' : '';
+      return `<div class="${cls.join(' ')}" style="--c:${family.color}">
+        <div class="card-frame">
+          <div class="card-tex"></div>
+          <div class="card-gloss"></div>
+          <div class="card-emblem"><span class="ico">${FAMILY_ICONS[family.id]}</span></div>
+          <div class="card-fam">${family.name}</div>
+          <div class="card-type">${typeInner}</div>
+        </div>
+        ${weight}
+      </div>`;
+    }
+
+    const container = document.getElementById('preview');
+    container.innerHTML = FAMILIES.map((family) => {
+      const cells = TYPES.map((type) => `
+        <div class="type-cell">
+          <span class="type-name">${type.name}</span>
+          <div class="card-pair">
+            ${cardNode(family, type, false)}
+            ${cardNode(family, type, true)}
+          </div>
+        </div>
+      `).join('');
+      return `
+        <section class="family-section">
+          <div class="family-title">
+            <span class="ico">${FAMILY_ICONS[family.id]}</span>
+            <span>${family.name}</span>
+            <span class="family-color" style="background:${family.color}"></span>
+          </div>
+          <div class="type-grid">${cells}</div>
+        </section>
+      `;
+    }).join('') + `
+      <section class="family-section">
+        <div class="family-title">
+          <span class="ico">${BACK_EMBLEM}</span>
+          <span>卡牌背面</span>
+        </div>
+        <div class="type-grid">
+          <div class="type-cell">
+            <span class="type-name">大卡</span>
+            <div class="card-pair">${backCardNode(false)}</div>
+          </div>
+          <div class="type-cell">
+            <span class="type-name">小卡</span>
+            <div class="card-pair">${backCardNode(true)}</div>
+          </div>
+        </div>
+      </section>
+    `;
+  </script>
+</body>
+</html>

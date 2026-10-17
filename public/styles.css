@@ -382,13 +382,14 @@ label input, label select {
   100% { transform: skewX(-22deg) translateX(455.56%); }
 }
 .card-guard .card-tex {
-  background-image: repeating-linear-gradient(45deg, rgba(0,0,0,0.55) 0 2px, transparent 2px 6px);
+  background-image: repeating-linear-gradient(45deg, rgba(0,0,0,0.7) 0 2px, transparent 2px 6px);
   opacity: 0.6;
 }
 .card-assassin .card-type { background: rgba(192,57,43,0.32); border-color: rgba(192,57,43,0.7); color: #ffd9d4; }
-.card-spy .card-type { background: rgba(124,141,181,0.28); border-color: rgba(124,141,181,0.62); color: #d4dcf0; }
+.card-spy .card-type { background: rgba(10,10,14,0.6); border-color: rgba(85,85,95,0.7); color: #c6c6ce; }
 .card-noble .card-type { background: rgba(212,160,23,0.32); border-color: rgba(212,160,23,0.72); color: #ffecb3; }
 .card-guard .card-type { background: rgba(154,164,178,0.28); border-color: rgba(154,164,178,0.62); color: #e8edf3; }
+.card-plain .card-type { background: rgba(154,164,178,0.28); border-color: rgba(154,164,178,0.62); color: #e8edf3; }
 
 /* 牌背（间谍背面 / 牌堆） */
 .card-back {
