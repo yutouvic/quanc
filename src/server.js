@@ -14,7 +14,7 @@ import fs from 'node:fs';
 import crypto from 'node:crypto';
 import serve from 'koa-static';
 import { Server } from 'boardgame.io/dist/cjs/server.js';
-import { QuancGame } from './game.js';
+import { GAMES } from './games.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
@@ -34,7 +34,7 @@ function generateMatchID() {
 }
 
 const server = Server({
-  games: [QuancGame],
+  games: GAMES.map((g) => g.game),
   uuid: generateMatchID,
   // 玩家凭证仍使用高强度随机串，不随对局 ID 简化
   generateCredentials: () => crypto.randomUUID(),
@@ -79,9 +79,12 @@ server.app.use(async (ctx, next) => {
 });
 
 const { appServer } = await server.run({ port: PORT });
-console.log(`\n  Quanc 卡牌游戏服务器已启动:`);
+console.log(`\n  游戏合集服务器已启动:`);
 console.log(`  - 客户端:  http://localhost:${PORT}`);
-console.log(`  - 大厅 API: http://localhost:${PORT}/games/${QuancGame.name}`);
+console.log(`  - 游戏库（${GAMES.length} 个游戏）:`);
+for (const g of GAMES) {
+  console.log(`    · ${g.title}  http://localhost:${PORT}/games/${g.game.name}`);
+}
 console.log(`\n  按 Ctrl+C 停止服务器。\n`);
 
 // 优雅关闭

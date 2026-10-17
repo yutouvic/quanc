@@ -1,6 +1,6 @@
 # Quanc 卡牌游戏 · 规则书
 
-> 本文档记录当前代码中**已实现**的全部规则，与 `src/game.js`、`src/cards.js` 保持一致。
+> 本文档记录当前代码中**已实现**的全部规则，与 `src/quanc.js`、`src/quanc-cards.js` 保持一致。
 
 ---
 

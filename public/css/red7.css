@@ -1,0 +1,146 @@
+/* ========== Red7 卡牌 ========== */
+.r7-card {
+  --c: #888;
+  width: var(--card-w); height: var(--card-h);
+  border-radius: 12px;
+  position: relative;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 2px;
+  background:
+    radial-gradient(120% 80% at 30% 18%, rgba(255,255,255,0.30), transparent 55%),
+    linear-gradient(160deg,
+      color-mix(in srgb, var(--c) 82%, #fff 16%) 0%,
+      var(--c) 40%,
+      color-mix(in srgb, var(--c) 55%, #000 42%) 100%);
+  border: 1px solid rgba(255,255,255,0.30);
+  box-shadow:
+    0 8px 18px rgba(0,0,0,0.5),
+    0 2px 5px rgba(0,0,0,0.4),
+    0 0 0 1px color-mix(in srgb, var(--c) 45%, transparent);
+  color: #fff; cursor: pointer; user-select: none;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.r7-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 14px 26px rgba(0,0,0,0.55), 0 0 0 2px rgba(255,255,255,0.4);
+}
+.r7-num {
+  font-size: 40px; font-weight: 800; line-height: 1;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.55);
+}
+.r7-color {
+  font-size: 14px; font-weight: 700; opacity: 0.95;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.55);
+}
+.r7-card-selected {
+  transform: translateY(-8px);
+  box-shadow:
+    0 0 0 3px #ffd966,
+    0 0 22px rgba(255,217,102,0.6),
+    0 12px 24px rgba(0,0,0,0.55);
+}
+.r7-card-dimmed { opacity: 0.45; filter: grayscale(0.6); }
+.r7-card-key { overflow: hidden; }
+.r7-card-key::after {
+  content: '';
+  position: absolute;
+  top: -30%; left: -70%;
+  width: 45%; height: 160%;
+  background: linear-gradient(100deg, transparent, rgba(255,255,255,0.6) 50%, transparent);
+  transform: skewX(-22deg);
+  animation: r7-card-sheen 2s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes r7-card-sheen {
+  0%, 55% { transform: skewX(-22deg) translateX(0); }
+  100% { transform: skewX(-22deg) translateX(455.56%); }
+}
+.r7-card-mini {
+  width: var(--mini-w); height: var(--mini-h);
+  border-radius: 7px;
+}
+.r7-card-mini .r7-num { font-size: 20px; }
+.r7-card-mini .r7-color { font-size: 8px; }
+.r7-card-mini:hover { transform: translateY(-3px); }
+
+/* ========== Red7 规则区 / 画布 ========== */
+.r7-rule {
+  --c: #e53935;
+  display: flex; align-items: center; gap: 14px;
+  background: rgba(0,0,0,0.25);
+  border: 1px solid color-mix(in srgb, var(--c) 60%, transparent);
+  border-radius: 12px; padding: 12px 16px;
+}
+.r7-rule-chip {
+  --c: #e53935;
+  width: 46px; height: 46px; border-radius: 50%; flex: none;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--c);
+  border: 2px solid rgba(255,255,255,0.5);
+  box-shadow: 0 0 16px color-mix(in srgb, var(--c) 60%, transparent);
+}
+.r7-rule-color { font-size: 20px; font-weight: 800; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.5); }
+.r7-rule-text { font-size: 16px; font-weight: 700; }
+.r7-rule-card-current { margin-left: auto; display: flex; align-items: center; }
+
+/* 规则一览（7 种颜色规则，当前规则高亮） */
+.r7-rule-list { margin-top: 12px; }
+.r7-rules { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; margin-top: 6px; }
+.r7-rule-card {
+  --c: #888;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 6px 10px; border-radius: 8px;
+  background: color-mix(in srgb, var(--c) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--c) 45%, transparent);
+  opacity: 0.75;
+}
+.r7-rule-card-active {
+  opacity: 1;
+  border-color: var(--c);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--c) 55%, transparent), 0 0 12px color-mix(in srgb, var(--c) 45%, transparent);
+}
+.r7-rule-card-name { font-size: 13px; font-weight: 800; }
+.r7-rule-card-desc { font-size: 10px; opacity: 0.85; }
+
+.r7-canvas { margin-top: 12px; }
+.r7-canvas-cards { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+
+/* ========== Red7 调色盘 ========== */
+.r7-palette { min-width: 180px; }
+.r7-winning { border-color: rgba(90,200,130,0.7); }
+.r7-eliminated { opacity: 0.55; }
+.r7-badge {
+  font-size: 11px; font-weight: 700; line-height: 1.4;
+  padding: 1px 8px; border-radius: 999px;
+}
+.r7-badge-win { background: #5fd08a; color: #0d2415; }
+.r7-badge-out { background: #555; color: #ccc; }
+.r7-head-right { display: inline-flex; align-items: center; gap: 6px; }
+.r7-hand-count { font-size: 12px; font-weight: 600; color: #ffd966; }
+
+/* ========== Red7 响应式 ========== */
+@media (max-width: 768px) {
+  .r7-num { font-size: 34px; }
+  .r7-rule-text { font-size: 14px; }
+}
+@media (max-width: 480px) {
+  .r7-num { font-size: 30px; }
+  .r7-color { font-size: 11px; }
+  .r7-card-mini .r7-num { font-size: 18px; }
+  .r7-rule { gap: 10px; padding: 10px 12px; }
+  .r7-rule-chip { width: 38px; height: 38px; }
+  .r7-rule-color { font-size: 17px; }
+  .r7-rule-text { font-size: 13px; }
+}
+
+/* 触屏设备：取消 Red7 悬停位移 */
+@media (hover: none) {
+  .r7-card:hover { transform: none; }
+  .r7-card-mini:hover { transform: none; }
+}
+
+/* 系统偏好「减少动态效果」时停用 Red7 选中态动画与关键牌流光 */
+@media (prefers-reduced-motion: reduce) {
+  .r7-card.r7-card-selected { animation: none; }
+  .r7-card-key::after { animation: none; }
+}

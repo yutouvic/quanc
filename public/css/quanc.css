@@ -1,0 +1,317 @@
+/* ========== 家族标签 ========== */
+.chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: color-mix(in srgb, var(--c) 30%, #1c1c1c);
+  border: 1px solid var(--c);
+  border-radius: 999px; padding: 3px 9px; font-size: 12px;
+}
+.chip-icon { font-size: 14px; }
+.chip-name { font-weight: 600; }
+.chip-count { opacity: 0.8; }
+
+/* ========== 玩家得分 ========== */
+.territory-score { font-size: 12px; color: #ffd966; }
+
+/* ========== 通用 SVG 图标 ========== */
+.ico { display: inline-flex; align-items: center; justify-content: center; line-height: 0; }
+.ico svg { width: 1em; height: 1em; display: block; }
+
+/* ========== 家族卡牌 ========== */
+.card {
+  --c: #888;
+  width: var(--card-w); height: var(--card-h);
+  padding: 2px; border-radius: 12px;
+  background: linear-gradient(160deg,
+    color-mix(in srgb, var(--c) 76%, #fff 18%) 0%,
+    var(--c) 36%,
+    color-mix(in srgb, var(--c) 50%, #000 42%) 64%,
+    color-mix(in srgb, var(--c) 68%, #fff 8%) 100%);
+  box-shadow:
+    0 8px 18px rgba(0,0,0,0.5),
+    0 2px 5px rgba(0,0,0,0.4),
+    0 0 0 1px color-mix(in srgb, var(--c) 40%, transparent);
+  cursor: pointer; user-select: none; position: relative;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.card:hover {
+  transform: translateY(-6px);
+  box-shadow:
+    0 14px 26px rgba(0,0,0,0.55),
+    0 0 0 1px color-mix(in srgb, var(--c) 65%, #fff 12%),
+    0 0 16px color-mix(in srgb, var(--c) 45%, transparent);
+}
+.card.card-selected {
+  transform: translateY(-8px);
+  box-shadow:
+    0 0 0 3px #ffd966,
+    0 0 22px rgba(255,217,102,0.6),
+    0 12px 24px rgba(0,0,0,0.55);
+}
+
+.card-frame {
+  width: 100%; height: 100%; border-radius: 10px;
+  position: relative; overflow: hidden;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  background:
+    radial-gradient(130% 90% at 28% 16%, rgba(255,255,255,0.18), transparent 52%),
+    linear-gradient(165deg, color-mix(in srgb, var(--c) 52%, #1c1208), color-mix(in srgb, var(--c) 40%, #000 44%) 66%);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06);
+}
+.card-tex {
+  position: absolute; inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+  mix-blend-mode: overlay; opacity: 0.35; pointer-events: none;
+}
+.card-gloss {
+  position: absolute; inset: 0;
+  background: linear-gradient(115deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.05) 24%, transparent 42%);
+  mix-blend-mode: screen; pointer-events: none;
+}
+.card-emblem {
+  width: 50px; height: 50px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 28px; color: #f2ead8; position: relative; z-index: 1;
+  background: radial-gradient(circle at 34% 28%, rgba(255,255,255,0.16), rgba(0,0,0,0.28) 72%);
+  border: 1px solid color-mix(in srgb, var(--c) 70%, #fff 8%);
+  box-shadow:
+    inset 0 1px 3px rgba(255,255,255,0.22),
+    0 2px 7px rgba(0,0,0,0.45),
+    0 0 14px color-mix(in srgb, var(--c) 55%, transparent);
+}
+.card-fam {
+  font-size: 13px; font-weight: 700; letter-spacing: 1px;
+  position: relative; z-index: 1; text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+}
+.card-type {
+  font-size: 10px; line-height: 1.6; padding: 0 8px; border-radius: 999px;
+  position: relative; z-index: 1;
+  display: inline-flex; align-items: center; gap: 3px;
+  background: rgba(0,0,0,0.38); border: 1px solid rgba(255,255,255,0.14); color: rgba(242,234,216,0.85);
+}
+.card-type .ico { font-size: 10px; }
+.card-weight {
+  position: absolute; top: -5px; right: -5px; z-index: 2;
+  background: #ffd966; color: #1a1a1a; font-size: 10px; font-weight: 700;
+  border-radius: 999px; padding: 1px 6px; box-shadow: 0 1px 4px rgba(0,0,0,0.5);
+}
+
+/* 类型差异化（外框/内衬/纹章仍为家族色） */
+.card-noble .card-frame::after {
+  content: ''; position: absolute; top: -30%; left: -70%;
+  width: 45%; height: 160%;
+  background: linear-gradient(100deg, transparent, rgba(255,255,255,0.5) 50%, transparent);
+  transform: skewX(-22deg);
+  will-change: transform;
+  animation: card-sheen 3.2s ease-in-out infinite;
+  pointer-events: none;
+}
+/* 流光用 transform 位移（合成器处理），不修改 left，避免逐帧布局/重绘 */
+@keyframes card-sheen {
+  0%, 55% { transform: skewX(-22deg) translateX(0); }
+  100% { transform: skewX(-22deg) translateX(455.56%); }
+}
+.card-guard .card-tex {
+  background-image: repeating-linear-gradient(45deg, rgba(0,0,0,0.7) 0 2px, transparent 2px 6px);
+  opacity: 0.6;
+}
+.card-assassin .card-type { background: rgba(192,57,43,0.32); border-color: rgba(192,57,43,0.7); color: #ffd9d4; }
+.card-spy .card-type { background: rgba(10,10,14,0.6); border-color: rgba(85,85,95,0.7); color: #c6c6ce; }
+.card-noble .card-type { background: rgba(212,160,23,0.32); border-color: rgba(212,160,23,0.72); color: #ffecb3; }
+.card-guard .card-type { background: rgba(154,164,178,0.28); border-color: rgba(154,164,178,0.62); color: #e8edf3; }
+.card-plain .card-type { background: rgba(154,164,178,0.28); border-color: rgba(154,164,178,0.62); color: #e8edf3; }
+
+/* 牌背（间谍背面 / 牌堆） */
+.card-back {
+  --c: #4a4a54;
+  background: linear-gradient(160deg, #2e2e34, #1c1c22 45%, #0b0b0e 70%, #1f1f25);
+}
+.card-back .card-frame {
+  background:
+    radial-gradient(130% 90% at 28% 16%, rgba(255,255,255,0.06), transparent 52%),
+    repeating-linear-gradient(45deg, rgba(255,255,255,0.03) 0 4px, transparent 4px 8px),
+    linear-gradient(165deg, #1c1c22, #0c0c10 66%);
+  box-shadow: inset 0 0 0 1px rgba(190,190,200,0.22);
+}
+.card-back .card-emblem { color: #9a9aa4; border-color: rgba(190,190,200,0.35); }
+
+/* ========== 区域小牌（复用大卡结构，仅按比例缩小） ========== */
+.card-mini {
+  width: var(--mini-w); height: var(--mini-h);
+  padding: 1px; border-radius: 7px;
+}
+.card-mini .card-frame { border-radius: 6px; gap: 1px; }
+.card-mini .card-emblem { width: 26px; height: 26px; font-size: 15px; }
+.card-mini .card-fam { font-size: 8px; letter-spacing: 0.5px; }
+.card-mini .card-type { font-size: 7px; padding: 0 4px; gap: 1px; line-height: 1.4; }
+.card-mini .card-type .ico { font-size: 7px; }
+.card-mini .card-weight { top: -3px; right: -3px; font-size: 7px; padding: 0 3px; }
+.card-mini:hover { transform: translateY(-3px); }
+.card-disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* ========== 餐桌（家族列板） ========== */
+.table-board { display: flex; flex-direction: column; gap: 4px; overflow-x: auto; }
+
+/* 牌行：左侧竖排区名 + 7 列网格 */
+.board-row { display: flex; gap: 6px; }
+.board-side {
+  width: 26px; flex: none;
+  display: flex; align-items: center; justify-content: center;
+}
+.board-side span {
+  writing-mode: vertical-rl; letter-spacing: 3px;
+  font-size: 12px; font-weight: 700; opacity: 0.9;
+}
+.board-side-favored span { color: #7fe0a3; }
+.board-side-disfavored span { color: #f08f8f; }
+
+.board-grid {
+  flex: 1; min-width: 0;
+  display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px;
+}
+
+/* 家族列：得宠列从计分板向上叠放，失宠列向下叠放 */
+.board-col {
+  --c: #888;
+  display: flex; flex-direction: row; flex-wrap: wrap-reverse;
+  justify-content: center; align-content: flex-start;
+  gap: 4px; min-height: 68px; padding: 4px;
+  border-radius: 8px;
+  border: 1px dashed color-mix(in srgb, var(--c) 45%, transparent);
+  background: color-mix(in srgb, var(--c) 7%, transparent);
+}
+.board-col-disfavored { flex-wrap: wrap; }
+.board-col-spy {
+  --c: #7c8db5;
+  border-style: solid;
+  background: rgba(124,141,181,0.07);
+}
+
+/* 中间共享家族计分板 */
+.board-head-cell {
+  display: flex; flex-direction: column; align-items: center; gap: 1px;
+  padding: 5px 2px 6px;
+  border-radius: 8px; border: 1px solid color-mix(in srgb, var(--c) 60%, transparent);
+  background: color-mix(in srgb, var(--c) 14%, transparent);
+}
+.board-head-cell .chip-icon { font-size: 20px; }
+.board-head-name { font-size: 12px; font-weight: 700; }
+.board-head-cell .fate-badge { font-size: 10px; }
+.board-head-cell.fate-neutral { opacity: 0.8; }
+.board-head-spy {
+  --c: #7c8db5; border-style: solid;
+  background: rgba(124,141,181,0.1);
+}
+.board-head-sub { color: #aebbd4; font-weight: 400; opacity: 0.8; }
+
+/* 家族命运状态强化：实心徽章胶囊（计分板本体保持家族配色） */
+.board-head-cell .fate-badge {
+  margin-top: 2px; padding: 1px 8px; border-radius: 999px;
+  font-size: 11px; line-height: 1.4;
+}
+.board-head-cell.fate-favored .fate-badge { background: #2f7d4f; color: #eafff2; box-shadow: 0 1px 4px rgba(0,0,0,0.4); }
+.board-head-cell.fate-disfavored .fate-badge { background: #8a3b3b; color: #ffeaea; box-shadow: 0 1px 4px rgba(0,0,0,0.4); }
+.board-head-cell.fate-neutral .fate-badge { background: rgba(255,255,255,0.1); color: #cfcfcf; }
+
+/* ========== 任务面板（横向排列，紧凑） ========== */
+.task-panel { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.task-item {
+  flex: 1 1 160px; min-width: 160px;
+  background: rgba(0,0,0,0.25); border-radius: 8px; padding: 8px 10px;
+  border: 1px solid rgba(255,255,255,0.12);
+}
+.task-item.task-done { border-color: rgba(90,200,130,0.55); background: rgba(47,125,79,0.14); }
+.task-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px; }
+.task-label { font-size: 10px; opacity: 0.7; text-transform: uppercase; letter-spacing: 1px; }
+.task-status { font-size: 11px; font-weight: 700; color: #cfcfcf; }
+.task-done .task-status { color: #7fe0a3; }
+.task-name { font-size: 13px; font-weight: 600; margin-bottom: 1px; }
+.task-desc { font-size: 11px; opacity: 0.7; }
+
+/* ========== 刺客结算面板 ========== */
+.assassin-title { font-size: 13px; color: #ffd966; margin-bottom: 8px; }
+.assassin-candidates { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+
+/* ========== 动效 ========== */
+/* 新牌进入：弹入 + 淡入 */
+@keyframes card-enter {
+  from { opacity: 0; transform: scale(0.5) translateY(-8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+.card.card-enter { animation: card-enter 0.35s cubic-bezier(0.34, 1.56, 0.64, 1); }
+
+/* 间谍翻开：3D 翻转 */
+@keyframes card-flip {
+  from { transform: rotateY(180deg); }
+  to { transform: rotateY(0deg); }
+}
+.board-col, .territory-cards { perspective: 600px; }
+.card.card-flip { animation: card-flip 0.6s ease; }
+
+/* ========== 结束结算（Quanc） ========== */
+.go-scores { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
+.go-row {
+  display: flex; flex-direction: column; gap: 2px;
+  background: rgba(0,0,0,0.25); border-radius: 8px; padding: 6px 12px; font-size: 13px;
+}
+.go-score { font-weight: 700; color: #ffd966; }
+.go-detail { font-size: 11px; opacity: 0.75; color: #ffd966; }
+
+/* 结算页家族命运一览 */
+.fate-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.fate-item {
+  display: inline-flex; align-items: center; gap: 5px;
+  border-radius: 8px; padding: 3px 8px; font-size: 12px;
+  border: 1px solid var(--c); background: rgba(255,255,255,0.04);
+}
+.fate-favored { box-shadow: inset 0 0 0 1px rgba(90,200,130,0.6); }
+.fate-disfavored { box-shadow: inset 0 0 0 1px rgba(220,120,120,0.6); }
+.fate-neutral { opacity: 0.75; }
+.fate-badge { font-weight: 700; }
+.fate-favored .fate-badge { color: #7fe0a3; }
+.fate-disfavored .fate-badge { color: #f08f8f; }
+.fate-neutral .fate-badge { color: #cfcfcf; }
+.fate-nums { opacity: 0.6; font-variant-numeric: tabular-nums; }
+
+/* ========== Quanc 响应式 ========== */
+@media (max-width: 768px) {
+  /* 卡牌与小牌内容同步缩小 */
+  .card-emblem { width: 42px; height: 42px; font-size: 24px; }
+  .card-mini .card-emblem { width: 22px; height: 22px; font-size: 13px; }
+
+  /* 餐桌板收紧：7 列在小屏保持等分可放下 */
+  .board-side { width: 20px; }
+  .board-side span { font-size: 11px; letter-spacing: 2px; }
+  .board-grid { gap: 4px; }
+  .board-col { gap: 3px; padding: 3px; min-height: 58px; }
+}
+
+@media (max-width: 480px) {
+  .board-head-name { font-size: 11px; }
+  .card-fam { font-size: 12px; }
+  .card-type { font-size: 10px; }
+
+  /* 任务面板：2 个任务同一行，文字必要时换行 */
+  .task-panel { flex-wrap: nowrap; }
+  .task-item { flex: 1 1 0; min-width: 0; }
+
+  /* 餐桌板：侧标更窄、列更紧凑 */
+  .board-side { width: 14px; }
+  .board-side span { font-size: 10px; letter-spacing: 1px; }
+  .board-col { padding: 2px; gap: 2px; min-height: 50px; }
+  .board-head-cell .chip-icon { font-size: 16px; }
+
+  .task-panel { gap: 6px; margin-bottom: 8px; }
+  .territory-score { font-size: 11px; }
+}
+
+/* 触屏设备：取消悬停位移，避免点按后卡片“卡住”抬起 */
+@media (hover: none) {
+  .card:hover { transform: none; }
+  .card-mini:hover { transform: none; }
+}
+
+/* 系统偏好「减少动态效果」时停用流光与翻牌，仅保留静态描边 */
+@media (prefers-reduced-motion: reduce) {
+  .card-noble .card-frame::after { animation: none; }
+  .card.card-enter, .card.card-flip { animation: none; }
+}

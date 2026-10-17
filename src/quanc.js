@@ -1,5 +1,5 @@
 /**
- * src/game.js
+ * src/quanc.js
  * 游戏核心逻辑定义（boardgame.io Game 对象）。
  *
  * 规则概要：
@@ -17,7 +17,7 @@
  *   · 领地得分：每张牌按其家族命运计 ±权重（得宠 +w，失宠 -w，中立 0），累加为玩家总分，最高分获胜。
  */
 
-import { createDeck, shuffleDeck, drawFromDeck, FAMILIES } from './cards.js';
+import { createDeck, shuffleDeck, drawFromDeck, FAMILIES } from './quanc-cards.js';
 
 // boardgame.io 用于标记非法操作的常量（本地定义，避免服务端额外打包依赖）
 const INVALID_MOVE = 'INVALID_MOVE';
@@ -405,6 +405,10 @@ export const QuancGame = {
         // 实际参与玩家（房间固定 5 个座位，可能只有 2-4 人开局）。
         order: PARTICIPANT_TURN_ORDER,
 
+        // 所有玩家均处于 active：出牌/结算类 move 内部自行校验 currentPlayer，
+        // 这样「结束游戏」这类房主全局操作无需受当前回合玩家限制。
+        activePlayers: { all: 'play' },
+
         onBegin: ({ G, ctx }) => {
           const playerID = ctx.currentPlayer;
           const player = G.players[playerID];
@@ -416,11 +420,19 @@ export const QuancGame = {
           G.pendingAssassin = null;
 
           if (G.deck.length === 0) {
-            // 牌堆已空，无法摸牌 → 触发结束
-            G.ended = true;
+            // 牌堆已空且所有玩家无手牌 → 触发结束
+            const allHandsEmpty = Object.values(G.players).every((p) => p.hand.length === 0);
+            if (allHandsEmpty) {
+              G.ended = true;
+              G.turnDrawCount = 0;
+              G.turnPlayCount = 0;
+              G.log.push('牌堆已空且所有玩家无手牌，游戏结束。');
+              return;
+            }
+            // 牌堆已空但仍有玩家持有手牌：无法摸牌，本回合直接跳过，等待其余玩家清空手牌
             G.turnDrawCount = 0;
             G.turnPlayCount = 0;
-            G.log.push('牌堆已空，游戏结束。');
+            G.log.push('牌堆已空，仍有玩家持有手牌，本回合跳过。');
             return;
           }
 
@@ -456,6 +468,7 @@ export const QuancGame = {
       move: ({ G, ctx, playerID }, handIndex, destination, target) => {
         // 仅在正式游戏阶段可出牌
         if (ctx.phase !== 'play') return INVALID_MOVE;
+        if (playerID !== ctx.currentPlayer) return INVALID_MOVE;
         const player = G.players[playerID];
         if (!player) return INVALID_MOVE;
         if (typeof handIndex !== 'number' || handIndex < 0 || handIndex >= player.hand.length) {
@@ -513,6 +526,7 @@ export const QuancGame = {
      */
     resolveAssassin: ({ G, ctx, playerID }, targetIndex) => {
       if (ctx.phase !== 'play') return INVALID_MOVE;
+      if (playerID !== ctx.currentPlayer) return INVALID_MOVE;
       const pending = G.pendingAssassin;
       if (!pending) return INVALID_MOVE;
       const area = areaArray(G, pending.location);
@@ -579,7 +593,7 @@ export const QuancGame = {
   },
 
   /**
-   * 结束条件与结算：牌堆抽完（ended 标记）后结束，并计算得分。
+   * 结束条件与结算：牌堆抽完且所有玩家无手牌（ended 标记）后结束，并计算得分。
    * 总分 = 领地得分 + 任务得分（每完成一个任务 +3 分）。
    */
   endIf: ({ G }) => {
@@ -597,7 +611,7 @@ export const QuancGame = {
       territoryScores: scores,
       taskResults,
       fates,
-      reason: '牌堆抽完，游戏结束',
+      reason: '牌堆抽完且所有玩家无手牌，游戏结束',
     };
   },
 };

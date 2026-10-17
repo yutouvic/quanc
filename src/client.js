@@ -5,17 +5,19 @@
 
 import { Client } from 'boardgame.io/client';
 import { SocketIO } from 'boardgame.io/multiplayer';
-import { QuancGame, computeFamilyFates, pLabel, getTask } from './game.js';
-import { FAMILIES, getFamily } from './cards.js';
-import { FAMILY_ICONS, TYPE_ICONS, BACK_EMBLEM } from './icons.js';
+import { QuancGame, computeFamilyFates, pLabel, getTask } from './quanc.js';
+import { Red7Game, RED7_COLORS, computeWinningIds, ruleKeyCards } from './red7.js';
+import { GAMES, getGame } from './games.js';
+import { FAMILIES, getFamily } from './quanc-cards.js';
+import { FAMILY_ICONS, TYPE_ICONS, BACK_EMBLEM } from './quanc-icons.js';
 
-const GAME_NAME = QuancGame.name;
 const API_BASE = `${window.location.protocol}//${window.location.host}`;
 /** 会话存储键：保存当前房间与座位凭证，用于刷新后自动恢复。 */
 const SESSION_KEY = 'quanc_session';
 
 let client = null;
 let currentState = null;     // 最近一次渲染所用的状态
+let currentGame = null;      // 当前选中的游戏条目（registry 中的元数据 + game 对象）
 let selectedIndex = null;    // 当前选中的手牌索引
 let currentMatchID = null;   // 当前对局 ID（用于展示与复制）
 let roomInfo = null;         // 当前房间信息 { matchID, playerID, credentials }
@@ -24,6 +26,12 @@ let currentPlayerName = '';  // 当前玩家昵称（用于恢复会话时回填
 let seenCardIds = new Set(); // 已出现过的卡牌 id，用于给新牌播放进入动画
 let prevEnded = false;       // 上一帧是否已结束（用于一次性触发翻牌/得分滚动）
 let justEnded = false;       // 本帧是否为游戏结束瞬间
+const loadedCSS = new Set(); // 已动态加载的游戏 CSS 路径（去重）
+
+/** 当前游戏的 boardgame.io 名称（大厅路由键），未选择时为空串。 */
+function gameName() {
+  return currentGame ? currentGame.game.name : '';
+}
 
 // ---------- 基础工具 ----------
 
@@ -105,14 +113,20 @@ async function readErrorMessage(res, fallback) {
   return serverMsg || `${fallback}（${res.status}）`;
 }
 
-/** 房间固定创建的座位数（2-5 人开局，未坐满时空座位不参与游戏）。 */
-const ROOM_SEATS = 5;
+/** 当前游戏的玩家人数范围文案（如「2-4 名玩家」）。 */
+function playerRange() {
+  if (!currentGame || !currentGame.game) return '';
+  const g = currentGame.game;
+  return `${g.minPlayers}-${g.maxPlayers} 名玩家`;
+}
 
 async function createMatch() {
-  const res = await fetch(`${API_BASE}/games/${GAME_NAME}/create`, {
+  // 房间座位数随游戏的 maxPlayers 自适应（Quanc=5、Red7=4）
+  const numPlayers = currentGame.game.maxPlayers;
+  const res = await fetch(`${API_BASE}/games/${gameName()}/create`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ numPlayers: ROOM_SEATS }),
+    body: JSON.stringify({ numPlayers }),
   });
   if (!res.ok) throw new Error(await readErrorMessage(res, '创建房间失败'));
   const data = await res.json();
@@ -129,7 +143,7 @@ async function joinMatch(matchID, playerName, playerID) {
   if (playerID !== undefined && playerID !== null && playerID !== '') {
     body.playerID = Number(playerID);
   }
-  const res = await fetch(`${API_BASE}/games/${GAME_NAME}/${matchID}/join`, {
+  const res = await fetch(`${API_BASE}/games/${gameName()}/${matchID}/join`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -141,7 +155,7 @@ async function joinMatch(matchID, playerName, playerID) {
 
 /** 离开房间（释放座位；房间无人时服务端会自动销毁房间）。 */
 async function leaveMatch(matchID, playerID, credentials) {
-  const res = await fetch(`${API_BASE}/games/${GAME_NAME}/${matchID}/leave`, {
+  const res = await fetch(`${API_BASE}/games/${gameName()}/${matchID}/leave`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ playerID: Number(playerID), credentials }),
@@ -382,14 +396,15 @@ function renderHand(G, playerID, active) {
   me.hand.forEach((card, idx) => {
     container.appendChild(handCardNode(card, {
       selected: selectedIndex === idx,
-      onClick: active ? () => { selectedIndex = (selectedIndex === idx ? null : idx); render(currentState); } : undefined,
+      onClick: active ? () => { selectedIndex = (selectedIndex === idx ? null : idx); renderGame(currentState); } : undefined,
     }));
   });
 }
 
 /** 刺客结算面板 */
 function renderAssassinPanel(state) {
-  const { G, playerID, isActive } = state;
+  const { G, ctx, playerID } = state;
+  const isActive = !ctx.gameover && ctx.currentPlayer === playerID;
   const pending = G.pendingAssassin;
   const panel = $('#play-panel');
   panel.innerHTML = '';
@@ -435,7 +450,8 @@ function renderAssassinPanel(state) {
 }
 
 function renderPlayPanel(state) {
-  const { G, ctx, playerID, isActive } = state;
+  const { G, ctx, playerID } = state;
+  const isActive = !ctx.gameover && ctx.currentPlayer === playerID;
   const panel = $('#play-panel');
 
   if (ctx.gameover) return;
@@ -596,7 +612,7 @@ function renderGameover(ctx) {
   box.appendChild(el('div', { class: 'fate-row' }, fateRows));
 }
 
-function render(state) {
+function renderQuanc(state) {
   if (!state) return;
   currentState = state;
   const { G, ctx, playerID } = state;
@@ -608,11 +624,304 @@ function render(state) {
   renderTable(G, fates);
   renderTaskPanel(G, playerID);
   // 有刺客待结算时禁用选牌
-  const canPick = state.isActive && !ctx.gameover && !G.pendingAssassin;
+  const canPick = !ctx.gameover && ctx.currentPlayer === playerID && !G.pendingAssassin;
   renderHand(G, playerID, canPick);
   renderPlayPanel(state);
   renderLog(G);
   renderGameover(ctx);
+}
+
+// ---------- Red7 渲染 ----------
+
+/** Red7 卡牌文字标签（如「红7」）。 */
+function red7CardLabel(card) {
+  return `${card.colorName}${card.number}`;
+}
+
+/** 清空 Red7 的选中手牌。 */
+function resetRed7Selection() {
+  selectedIndex = null;
+}
+
+/** Red7 卡牌节点：数字 + 颜色底。 */
+function red7CardNode(card, { mini = false, selected = false, onClick = undefined, dimmed = false, key = false } = {}) {
+  const color = RED7_COLORS[card.colorIndex];
+  const cls = ['r7-card'];
+  if (mini) cls.push('r7-card-mini');
+  if (selected) cls.push('r7-card-selected');
+  if (dimmed) cls.push('r7-card-dimmed');
+  if (key) cls.push('r7-card-key');
+  const attrs = { class: cls.join(' '), style: `--c:${color.color}` };
+  if (onClick) { attrs.role = 'button'; attrs.tabindex = '0'; attrs.onClick = onClick; }
+  return el('div', attrs, [
+    el('div', { class: 'r7-num', text: String(card.number) }),
+    el('div', { class: 'r7-color', text: card.colorName }),
+  ]);
+}
+
+/** 头部信息：当前规则 + 剩余人数。 */
+function renderRed7Header(G) {
+  const rule = RED7_COLORS[G.ruleColorIndex];
+  const activeCount = G.playOrder.filter((id) => !G.players[id].eliminated).length;
+  $('#deck-info').textContent = `当前规则：${rule.name}·${rule.rule} · 摸牌堆 ${G.deck} 张 · 剩余 ${activeCount} 人`;
+}
+
+/** 画布区：当前生效规则牌 + 7 种颜色规则一览（当前高亮）+ 弃牌堆历史。 */
+function renderRed7RuleArea(G) {
+  const container = $('#table');
+  container.innerHTML = '';
+  const rule = RED7_COLORS[G.ruleColorIndex];
+  const currentCard = G.canvas.length > 0 ? G.canvas[G.canvas.length - 1] : null;
+
+  // 当前生效规则牌
+  const curKids = [
+    el('div', { class: 'r7-rule-chip', style: `--c:${rule.color}` }, [
+      el('span', { class: 'r7-rule-color', text: rule.name }),
+    ]),
+    el('div', { class: 'r7-rule-text', text: `${rule.name}规则：${rule.rule}` }),
+  ];
+  if (currentCard) {
+    curKids.push(el('div', { class: 'r7-rule-card-current' }, [red7CardNode(currentCard, { mini: true })]));
+  }
+  container.appendChild(el('div', { class: 'r7-rule', style: `--c:${rule.color}` }, curKids));
+
+  // 7 种颜色规则一览（当前规则高亮）
+  container.appendChild(el('div', { class: 'r7-rule-list' }, [
+    el('div', { class: 'r7-rules' }, RED7_COLORS.map((c, i) => {
+      const active = i === G.ruleColorIndex;
+      return el('div', {
+        class: `r7-rule-card ${active ? 'r7-rule-card-active' : ''}`,
+        style: `--c:${c.color}`,
+      }, [
+        el('span', { class: 'r7-rule-card-name', text: c.name }),
+        el('span', { class: 'r7-rule-card-desc', text: c.rule }),
+      ]);
+    })),
+  ]));
+
+  // 画布区弃牌堆
+  container.appendChild(el('div', { class: 'r7-canvas' }, [
+    el('div', { class: 'label', text: '画布区（弃牌改规则）' }),
+    G.canvas.length === 0
+      ? el('span', { class: 'empty-hint', text: '尚未弃牌，当前为初始规则' })
+      : el('div', { class: 'r7-canvas-cards' }, G.canvas.map((c) => red7CardNode(c, { mini: true }))),
+  ]));
+}
+
+/** 各玩家调色盘：淘汰置灰、当前回合高亮、优胜标记。 */
+function renderRed7Players(G, ctx, playerID) {
+  const container = $('#players');
+  container.innerHTML = '';
+  const winners = computeWinningIds(G);
+  const nicknames = nicknameMap();
+  for (const id of G.playOrder) {
+    const p = G.players[id];
+    const isMe = id === playerID;
+    const isCurrent = !ctx.gameover && id === ctx.currentPlayer;
+    const eliminated = p.eliminated;
+    const winning = !eliminated && winners.includes(id);
+    const cls = ['territory', 'r7-palette'];
+    if (isMe) cls.push('me');
+    if (isCurrent) cls.push('active');
+    if (eliminated) cls.push('r7-eliminated');
+    if (winning) cls.push('r7-winning');
+    const handCount = Array.isArray(p.hand) ? p.hand.length : p.hand;
+    const rightKids = [el('span', { class: 'r7-hand-count', text: `手牌 ${handCount}` })];
+    if (eliminated) rightKids.push(el('span', { class: 'r7-badge r7-badge-out', text: '已出局' }));
+    else if (winning) rightKids.push(el('span', { class: 'r7-badge r7-badge-win', text: '优胜' }));
+    const headKids = [
+      el('span', { class: 'territory-name', text: `${playerNameText(id, nicknames)}${isMe ? '（你）' : ''}` }),
+      el('span', { class: 'r7-head-right' }, rightKids),
+    ];
+    container.appendChild(el('div', { class: cls.join(' ') }, [
+      el('div', { class: 'territory-head' }, headKids),
+      el('div', { class: 'territory-cards' },
+        p.palette.length === 0
+          ? [el('span', { class: 'empty-hint', text: '调色盘为空' })]
+          : (() => {
+              const keyIds = new Set(ruleKeyCards(G.ruleColorIndex, p.palette).map((k) => k.id));
+              return p.palette.map((c) => red7CardNode(c, { mini: true, dimmed: eliminated, key: !eliminated && keyIds.has(c.id) }));
+            })(),
+      ),
+    ]));
+  }
+}
+
+/** 手牌：仅当前回合玩家可点选。 */
+function renderRed7Hand(G, playerID, isMyTurn) {
+  const container = $('#hand');
+  container.innerHTML = '';
+  const me = G.players[playerID];
+  if (!me || !Array.isArray(me.hand)) {
+    container.appendChild(el('div', { class: 'empty-hint', text: '等待其他玩家行动...' }));
+    return;
+  }
+  if (me.hand.length === 0) {
+    container.appendChild(el('div', { class: 'empty-hint', text: isMyTurn ? '手牌已空，回合开始将自动出局' : '手牌为空' }));
+    return;
+  }
+  me.hand.forEach((card, idx) => {
+    container.appendChild(red7CardNode(card, {
+      selected: selectedIndex === idx,
+      onClick: isMyTurn ? () => {
+        selectedIndex = (selectedIndex === idx ? null : idx);
+        renderGame(currentState);
+      } : undefined,
+    }));
+  });
+}
+
+/** 进阶规则待结算面板：打出1（选其他玩家牌）或打出7（弃自己调色盘牌）。 */
+function renderRed7PendingPanel(state) {
+  const { G, playerID } = state;
+  const panel = $('#play-panel');
+  panel.innerHTML = '';
+  const pending = G.pending;
+
+  if (pending.type === 'action1') {
+    panel.appendChild(el('div', { class: 'empty-hint', text: '打出 1：选择其他玩家调色盘中的 1 张牌（置于抽牌堆顶部）。' }));
+    const others = G.playOrder.filter(
+      (id) => id !== playerID && !G.players[id].eliminated && G.players[id].palette.length > 0,
+    );
+    for (const id of others) {
+      const palette = G.players[id].palette;
+      panel.appendChild(el('div', { class: 'dest-row' }, [
+        el('span', { class: 'dest-title', text: `玩家 ${pLabel(id)}` }),
+        el('div', { class: 'dest-buttons' }, palette.map((card, idx) => red7CardNode(card, {
+          mini: true,
+          onClick: () => client.moves.resolveAction1(id, idx),
+        }))),
+      ]));
+    }
+  } else if (pending.type === 'action7') {
+    panel.appendChild(el('div', { class: 'empty-hint', text: '打出 7：弃置 1 张调色盘中的牌（不含本张 7）到画布。' }));
+    const me = G.players[playerID];
+    const candidates = me.palette
+      .map((card, idx) => ({ card, idx }))
+      .filter(({ card }) => card.id !== pending.cardId);
+    panel.appendChild(el('div', { class: 'dest-buttons' }, candidates.map(({ card, idx }) => red7CardNode(card, {
+      mini: true,
+      onClick: () => client.moves.resolveAction7(idx),
+    }))));
+  }
+}
+
+/** 行动面板：打出到调色盘 / 弃置到画布 / 结束回合；超出使用次数或未选牌则置灰；含进阶规则待结算与「必须继续打」。 */
+function renderRed7PlayPanel(state) {
+  const { G, ctx, playerID } = state;
+  const panel = $('#play-panel');
+  panel.innerHTML = '';
+
+  if (ctx.gameover) return;
+
+  const isMyTurn = ctx.currentPlayer === playerID;
+  if (!isMyTurn) {
+    panel.appendChild(el('div', { class: 'empty-hint', text: '等待其他玩家行动...' }));
+    return;
+  }
+
+  // 进阶规则：待结算效果
+  if (G.pending) {
+    renderRed7PendingPanel(state);
+    return;
+  }
+
+  const me = G.players[playerID];
+  const hand = Array.isArray(me.hand) ? me.hand : [];
+  const played = G.turnPlayed;
+  const discarded = G.turnDiscarded;
+  const mustPlay = G.mustPlay;
+
+  const hasSel = selectedIndex != null && selectedIndex < hand.length;
+  const canPlay = hasSel && (!played || mustPlay);
+  const canDiscard = hasSel && !discarded;
+  const canEnd = !mustPlay;
+
+  // 三个按钮始终显示，超出使用次数或未选牌则置灰
+  const buttons = [
+    el('button', {
+      class: 'btn btn-sm',
+      text: '打出到调色盘',
+      disabled: canPlay ? false : 'disabled',
+      onClick: () => { client.moves.playCard(selectedIndex); resetRed7Selection(); },
+    }),
+    el('button', {
+      class: 'btn btn-sm',
+      text: '弃置到画布',
+      disabled: canDiscard ? false : 'disabled',
+      onClick: () => { client.moves.discardToCanvas(selectedIndex); resetRed7Selection(); },
+    }),
+    el('button', {
+      class: 'btn btn-sm btn-primary',
+      text: '结束回合',
+      disabled: canEnd ? false : 'disabled',
+      onClick: () => { client.moves.endTurn(); resetRed7Selection(); },
+    }),
+  ];
+
+  let hint;
+  if (hand.length === 0) {
+    hint = '手牌已空，可结束回合。';
+  } else if (!hasSel) {
+    hint = '请先点击选择一张手牌。';
+  } else {
+    hint = `已选：${red7CardLabel(hand[selectedIndex])}。选择行动：`;
+  }
+  if (mustPlay) hint = `打出 5：必须继续打出 1 张牌。 ${hint}`;
+
+  panel.appendChild(el('div', { class: 'empty-hint', text: hint }));
+  panel.appendChild(el('div', { class: 'dest-row' }, buttons));
+}
+
+/** 结算：仅显示获胜者。 */
+function renderRed7Gameover(ctx) {
+  const box = $('#gameover');
+  if (!ctx.gameover) {
+    box.style.display = 'none';
+    box.innerHTML = '';
+    return;
+  }
+  const nicknames = nicknameMap();
+  box.style.display = 'block';
+  box.innerHTML = '';
+  box.appendChild(el('h2', { text: '本轮结束' }));
+  box.appendChild(el('p', {
+    class: 'go-summary',
+    text: `获胜者：${ctx.gameover.winners.map((w) => playerNameText(w, nicknames)).join('、')}`,
+  }));
+}
+
+/** Red7 统一渲染。 */
+function renderRed7(state) {
+  if (!state) return;
+  currentState = state;
+  const { G, ctx, playerID } = state;
+  const taskPanel = $('#task-panel');
+  if (taskPanel) taskPanel.style.display = 'none';
+  renderRed7Header(G);
+  renderRed7RuleArea(G);
+  renderRed7Players(G, ctx, playerID);
+  renderRed7Hand(G, playerID, !ctx.gameover && ctx.currentPlayer === playerID && !G.pending);
+  renderRed7PlayPanel(state);
+  renderLog(G);
+  renderRed7Gameover(ctx);
+}
+
+// ---------- 渲染分发 ----------
+
+/**
+ * 各游戏的渲染函数（按 game.name 注册）。
+ * 新增游戏时，在此把 game.name 映射到对应的渲染函数即可。
+ */
+const GAME_RENDERERS = {
+  [QuancGame.name]: renderQuanc,
+  [Red7Game.name]: renderRed7,
+};
+
+/** 按当前对局的游戏分发渲染。 */
+function renderGame(state) {
+  const fn = currentGame && GAME_RENDERERS[currentGame.game.name];
+  if (fn) fn(state);
 }
 
 // ---------- 房间等待界面 ----------
@@ -718,7 +1027,11 @@ function renderLobby(state) {
 function saveSession() {
   if (!roomInfo) return;
   try {
-    sessionStorage.setItem(SESSION_KEY, JSON.stringify({ ...roomInfo, playerName: currentPlayerName }));
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify({
+      ...roomInfo,
+      playerName: currentPlayerName,
+      game: gameName(),
+    }));
   } catch {
     // 存储不可用时静默降级：仅本次刷新无法自动恢复，不影响正常游戏
   }
@@ -730,7 +1043,7 @@ function loadSession() {
     const raw = sessionStorage.getItem(SESSION_KEY);
     if (!raw) return null;
     const saved = JSON.parse(raw);
-    if (!saved || !saved.matchID || saved.playerID == null || !saved.credentials) return null;
+    if (!saved || !saved.matchID || saved.playerID == null || !saved.credentials || !saved.game) return null;
     return saved;
   } catch {
     return null;
@@ -754,8 +1067,15 @@ async function restoreSession() {
   const saved = loadSession();
   if (!saved) return false;
 
-  const status = $('#setup-status');
-  const goneMsg = '上次的对局已结束，请重新创建或加入。';
+  const game = getGame(saved.game);
+  if (!game) {
+    clearSession();
+    return false;
+  }
+  currentGame = game;
+
+  const status = $('#library-status');
+  const goneMsg = '上次的对局已结束，请重新选择游戏并创建或加入。';
   const abort = () => {
     clearSession();
     status.textContent = goneMsg;
@@ -766,7 +1086,7 @@ async function restoreSession() {
 
   let data;
   try {
-    const res = await fetch(`${API_BASE}/games/${GAME_NAME}/${saved.matchID}`);
+    const res = await fetch(`${API_BASE}/games/${gameName()}/${saved.matchID}`);
     if (!res.ok) return abort(); // 房间已被销毁
     data = await res.json();
   } catch {
@@ -782,41 +1102,130 @@ async function restoreSession() {
   currentPlayerName = saved.playerName || '';
   $('#player-name').value = currentPlayerName;
   status.textContent = '';
-  enterRoom(saved.matchID, saved.playerID, saved.credentials);
+  enterRoom(saved.matchID, saved.playerID, saved.credentials, saved.playerName);
   return true;
+}
+
+// ---------- 游戏库：选择游戏 ----------
+
+/** 渲染游戏库卡片网格。 */
+function renderLibrary() {
+  const grid = $('#game-grid');
+  grid.innerHTML = '';
+  for (const g of GAMES) {
+    grid.appendChild(el('div', {
+      class: 'game-card',
+      style: `--c:${g.color}`,
+      role: 'button',
+      tabindex: '0',
+      onClick: () => selectGame(g),
+    }, [
+      el('div', { class: 'game-card-icon', text: g.icon }),
+      el('div', { class: 'game-card-body' }, [
+        el('div', { class: 'game-card-title', text: g.title }),
+        el('div', { class: 'game-card-tagline', text: g.tagline }),
+        el('div', { class: 'game-card-desc', text: g.description }),
+      ]),
+    ]));
+  }
+}
+
+/** 按需加载游戏专属 CSS（base.css 已静态引入，游戏 CSS 首次需要时动态注入）。 */
+function ensureGameCSS(game) {
+  const css = game && game.css;
+  if (!css || loadedCSS.has(css)) return;
+  loadedCSS.add(css);
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = css;
+  document.head.appendChild(link);
+}
+
+/** 按当前游戏把对应的 <template> 注入到游戏界面容器。 */
+function mountGameTemplate(game) {
+  const body = $('#game-body');
+  if (!body) return;
+  body.innerHTML = '';
+  const tpl = game && game.template ? document.getElementById(game.template) : null;
+  if (tpl) body.appendChild(tpl.content.cloneNode(true));
+}
+
+/** 选中某个游戏，进入其创建 / 加入界面。 */
+function selectGame(game) {
+  currentGame = game;
+  ensureGameCSS(game);
+  $('#setup-status').textContent = '';
+  renderSetupHeader();
+  showSetupScreen();
+}
+
+/** 根据当前选中的游戏刷新设置界面标题。 */
+function renderSetupHeader() {
+  const g = currentGame;
+  $('#setup-game-title').textContent = g ? g.title : '选择游戏';
+  $('#setup-game-subtitle').textContent = g ? g.tagline : '';
+  const hint = $('#setup-hint');
+  if (hint) {
+    hint.textContent = `提示：创建房间后，把对局 ID 发给好友；好友粘贴 ID 即可加入（自动分配空座位）。${playerRange()}就位后，由房主开始游戏。可在多个浏览器标签页加入同一房间模拟多名玩家。`;
+  }
 }
 
 // ---------- 进入房间 / 切换界面 ----------
 
+function showLibraryScreen() {
+  inGameScreen = false;
+  $('#setup').style.display = 'none';
+  $('#lobby').style.display = 'none';
+  $('#game').style.display = 'none';
+  $('#library').style.display = 'block';
+  renderLibrary();
+}
+
+function showSetupScreen() {
+  inGameScreen = false;
+  $('#library').style.display = 'none';
+  $('#lobby').style.display = 'none';
+  $('#game').style.display = 'none';
+  $('#setup').style.display = 'block';
+}
+
 function showLobbyScreen() {
   inGameScreen = false;
-  $('#game').style.display = 'none';
+  $('#library').style.display = 'none';
   $('#setup').style.display = 'none';
+  $('#game').style.display = 'none';
   $('#lobby').style.display = 'block';
+  const subtitle = $('#lobby-subtitle');
+  if (subtitle) subtitle.textContent = `${playerRange()}就位后，由房主开始游戏`;
 }
 
 function showGameScreen() {
   if (!inGameScreen) {
     inGameScreen = true;
-    selectedIndex = null;
-    $('#lobby').style.display = 'none';
+    resetRed7Selection();
+    mountGameTemplate(currentGame);
+    $('#library').style.display = 'none';
     $('#setup').style.display = 'none';
+    $('#lobby').style.display = 'none';
     $('#game').style.display = 'block';
   }
+  $('#game-title').textContent = currentGame ? currentGame.title : '';
   $('#match-id').textContent = currentMatchID;
-  // 仅房主（座位 0）可以结束游戏
+  // 进行中仅房主（座位 0）可结束；游戏结束后所有玩家都可退出返回游戏库
   const isHost = !!roomInfo && roomInfo.playerID === '0';
-  $('#end-game-btn').style.display = isHost ? '' : 'none';
+  const isGameover = !!(currentState && currentState.ctx && currentState.ctx.gameover);
+  $('#end-game-btn').style.display = (isHost || isGameover) ? '' : 'none';
 }
 
 /** 创建 / 加入成功后进入房间：立刻建立游戏连接，在大厅阶段等待房主开始。 */
 function enterRoom(matchID, playerID, credentials, playerName) {
+  ensureGameCSS(currentGame); // 覆盖创建/加入/会话恢复所有路径
   roomInfo = { matchID, playerID, credentials };
   if (playerName) currentPlayerName = playerName;
   saveSession(); // 记录会话，刷新后可自动恢复
   inGameScreen = false;
   currentState = null;
-  selectedIndex = null;
+  resetRed7Selection();
   seenCardIds.clear();
   prevEnded = false;
   justEnded = false;
@@ -825,7 +1234,7 @@ function enterRoom(matchID, playerID, credentials, playerName) {
   renderLobby(null);
 
   client = Client({
-    game: QuancGame,
+    game: currentGame.game,
     matchID,
     playerID,
     credentials,
@@ -844,7 +1253,7 @@ function enterRoom(matchID, playerID, credentials, playerName) {
 
     // 房主结束本局：所有玩家退出游戏页，回到设置界面
     if (state.G && state.G.hostEnded) {
-      setTimeout(() => resetToSetup('本局已结束，本局信息已清除，可重新创建或加入对局。'), 300);
+      setTimeout(() => resetToLibrary('本局已结束，可返回游戏库重新选择游戏。'), 300);
       return;
     }
 
@@ -855,7 +1264,7 @@ function enterRoom(matchID, playerID, credentials, playerName) {
     if (phase === 'play' || state.ctx.gameover) {
       // 房主已开始游戏（或游戏已结束）：进入游戏界面
       showGameScreen();
-      render(view);
+      renderGame(view);
       return;
     }
 
@@ -870,14 +1279,15 @@ function enterRoom(matchID, playerID, credentials, playerName) {
   client.start();
 }
 
-/** 断开当前游戏连接并回到设置界面。 */
-function resetToSetup(message) {
+/** 断开当前游戏连接并回到游戏库。 */
+function resetToLibrary(message) {
   if (client) {
     client.stop();
     client = null;
   }
   currentState = null;
-  selectedIndex = null;
+  currentGame = null;
+  resetRed7Selection();
   seenCardIds.clear();
   prevEnded = false;
   justEnded = false;
@@ -886,9 +1296,10 @@ function resetToSetup(message) {
   inGameScreen = false;
   clearSession(); // 主动离开后不再自动恢复
 
-  // 清空游戏界面残留
-  for (const sel of ['#players', '#table', '#log', '#hand', '#play-panel', '#task-panel', '#gameover', '#room-seats', '#room-action']) {
-    $(sel).innerHTML = '';
+  // 清空游戏界面残留（模板内元素可能尚未注入，需空值安全）
+  for (const sel of ['#players', '#table', '#log', '#hand', '#play-panel', '#task-panel', '#gameover', '#room-seats', '#room-action', '#game-body']) {
+    const node = $(sel);
+    if (node) node.innerHTML = '';
   }
   $('#gameover').style.display = 'none';
   $('#deck-info').textContent = '';
@@ -897,15 +1308,18 @@ function resetToSetup(message) {
   $('#room-copy-btn').textContent = '复制邀请';
   $('#room-count').textContent = '';
 
-  $('#game').style.display = 'none';
-  $('#lobby').style.display = 'none';
-  $('#setup').style.display = 'block';
-  $('#setup-status').textContent = message || '';
+  showLibraryScreen();
+  $('#library-status').textContent = message || '';
 }
 
 // ---------- 设置界面事件 ----------
 
 function bindSetupEvents() {
+  $('#back-to-library').addEventListener('click', () => {
+    currentGame = null;
+    showLibraryScreen();
+  });
+
   $('#create-btn').addEventListener('click', async () => {
     const playerName = $('#player-name').value.trim();
     const status = $('#setup-status');
@@ -987,7 +1401,7 @@ function bindRoomEvents() {
     if (!window.confirm('确定要离开房间吗？')) return;
     const info = roomInfo;
     if (info) await leaveMatch(info.matchID, info.playerID, info.credentials).catch(() => {});
-    resetToSetup('你已离开房间，可重新创建或加入对局。');
+    resetToLibrary('你已离开房间，可返回游戏库重新选择游戏。');
   });
 }
 
@@ -998,15 +1412,15 @@ function bindGameEvents() {
   });
 
   $('#end-game-btn').addEventListener('click', () => {
-    if (!roomInfo || roomInfo.playerID !== '0') return; // 仅房主可结束
-    if (!window.confirm('确定要结束本局吗？本局信息将被清除，且不做结算。')) return;
-    // 游戏已结束（ctx.gameover 已生成）后，boardgame.io 会拒绝所有 move，
-    // endGame 无法再广播，此时直接退回设置界面即可。
-    if (currentState && currentState.ctx && currentState.ctx.gameover) {
-      resetToSetup('本局已结束，本局信息已清除，可重新创建或加入对局。');
+    // 游戏已结束：任何玩家点击都各自退出（boardgame.io 拒绝 gameover 后的 move，无法广播）
+    const isGameover = !!(currentState && currentState.ctx && currentState.ctx.gameover);
+    if (isGameover) {
+      resetToLibrary('本局已结束，可返回游戏库重新选择游戏。');
       return;
     }
-    // 通过 move 广播给房间内所有玩家，所有客户端（含房主）统一退出游戏页
+    // 进行中：仅房主可结束，并通过 move 广播给所有玩家统一退出
+    if (!roomInfo || roomInfo.playerID !== '0') return;
+    if (!window.confirm('确定要结束本局吗？本局信息将被清除，且不做结算。')) return;
     client.moves.endGame();
   });
 }
@@ -1015,7 +1429,9 @@ async function init() {
   bindSetupEvents();
   bindRoomEvents();
   bindGameEvents();
-  // 刷新页面后自动回到上次的房间 / 对局（无有效会话则留在设置界面）
+  // 默认展示游戏库
+  showLibraryScreen();
+  // 刷新页面后自动回到上次的房间 / 对局（无有效会话则留在游戏库）
   await restoreSession();
 }
 

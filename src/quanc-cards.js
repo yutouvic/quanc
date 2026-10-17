@@ -1,5 +1,5 @@
 /**
- * src/cards.js
+ * src/quanc-cards.js
  * 卡牌定义与牌堆工具。
  *
  * 规则：共 90 张牌，分 6 个家族，每个家族 15 张。
@@ -14,7 +14,7 @@
  * - 平民（plain）  ：无特效。
  */
 
-import { FAMILY_ICONS, TYPE_ICONS } from './icons.js';
+import { FAMILY_ICONS, TYPE_ICONS } from './quanc-icons.js';
 
 /**
  * 六个家族定义。

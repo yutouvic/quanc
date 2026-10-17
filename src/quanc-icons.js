@@ -1,5 +1,5 @@
 /**
- * src/icons.js
+ * src/quanc-icons.js
  * 统一的纹章 SVG 图标（stroke 线稿风格，通过 currentColor 上色）。
  *
  * 用法：渲染时把字符串用 innerHTML 注入到一个 .ico 容器里，

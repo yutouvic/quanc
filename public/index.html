@@ -3,14 +3,25 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>Quanc · 回合制卡牌游戏</title>
-  <link rel="stylesheet" href="styles.css" />
+  <title>游戏合集</title>
+  <link rel="stylesheet" href="css/base.css" />
 </head>
 <body>
+  <!-- 游戏库：选择游戏 -->
+  <section id="library" class="screen">
+    <h1>游戏库</h1>
+    <p class="subtitle">选择一个游戏开始对局</p>
+    <div id="game-grid" class="game-grid"></div>
+    <div id="library-status" class="status"></div>
+  </section>
+
   <!-- 设置界面：创建 / 加入对局 -->
-  <section id="setup" class="screen">
-    <h1>Quanc 卡牌游戏</h1>
-    <p class="subtitle">2-5 人回合制卡牌游戏</p>
+  <section id="setup" class="screen" style="display:none;">
+    <div class="screen-topbar">
+      <button id="back-to-library" class="btn btn-ghost">← 返回游戏库</button>
+    </div>
+    <h1 id="setup-game-title">游戏</h1>
+    <p class="subtitle" id="setup-game-subtitle"></p>
 
     <div class="setup-grid">
       <div class="setup-card">
@@ -29,13 +40,13 @@
     </div>
 
     <div id="setup-status" class="status"></div>
-    <p class="hint-msg">提示：创建房间后，把对局 ID 发给好友；好友粘贴 ID 即可加入（自动分配空座位）。2-5 名玩家就位后，由房主开始游戏。可在多个浏览器标签页加入同一房间模拟多名玩家。</p>
+    <p id="setup-hint" class="hint-msg">提示：创建房间后，把对局 ID 发给好友；好友粘贴 ID 即可加入（自动分配空座位）。</p>
   </section>
 
   <!-- 房间等待界面：人数到齐后房主才能开始 -->
   <section id="lobby" class="screen" style="display:none;">
     <h1>游戏房间</h1>
-    <p class="subtitle">2-5 名玩家就位后，由房主开始游戏</p>
+    <p id="lobby-subtitle" class="subtitle">玩家就位后，由房主开始游戏</p>
 
     <div class="room-card">
       <div class="room-head">
@@ -59,7 +70,7 @@
   <!-- 游戏界面 -->
   <section id="game" class="screen" style="display:none;">
     <header class="game-header">
-      <h1>Quanc</h1>
+      <h1 id="game-title">游戏</h1>
       <div class="game-header-right">
         <div class="match-info">
           <span>对局 ID</span>
@@ -73,6 +84,12 @@
 
     <div id="gameover" class="gameover-box" style="display:none;"></div>
 
+    <!-- 游戏专属界面由 JS 按当前游戏从下方 <template> 注入 -->
+    <div id="game-body"></div>
+  </section>
+
+  <!-- Quanc 游戏界面模板 -->
+  <template id="template-quanc">
     <div class="game-layout">
       <!-- 上方：餐桌（得宠区 / 失宠区） -->
       <main class="table-wrap">
@@ -93,7 +110,30 @@
       <div id="hand" class="hand"></div>
       <div id="play-panel" class="play-panel"></div>
     </footer>
-  </section>
+  </template>
+
+  <!-- Red7 游戏界面模板 -->
+  <template id="template-red7">
+    <div class="game-layout">
+      <!-- 上方：规则区 / 画布区 -->
+      <main class="table-wrap">
+        <div id="table" class="table"></div>
+      </main>
+
+      <!-- 下方：各玩家调色盘 -->
+      <aside id="players" class="players"></aside>
+
+      <!-- 日志区域（已通过 CSS 隐藏，保留节点） -->
+      <aside id="log" class="log"></aside>
+    </div>
+
+    <!-- 底部：手牌与行动 -->
+    <footer class="hand-wrap">
+      <div class="label">你的手牌</div>
+      <div id="hand" class="hand"></div>
+      <div id="play-panel" class="play-panel"></div>
+    </footer>
+  </template>
 
   <script src="client.js"></script>
 </body>
