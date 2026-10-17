@@ -160,6 +160,138 @@ export function computeScores(G) {
   return { scores, fates };
 }
 
+// ========== 任务系统 ==========
+
+/** 下家：playOrder 中当前玩家的下一位（循环）。 */
+function nextPlayerId(G, playerID) {
+  const order = G.playOrder;
+  if (!order || order.length === 0) return playerID;
+  const idx = order.indexOf(playerID);
+  if (idx < 0) return playerID;
+  return order[(idx + 1) % order.length];
+}
+
+/** 统计一组牌中指定家族的张数（按张数计，非权重）。 */
+function countFamily(cards, familyId) {
+  let n = 0;
+  for (const c of cards) if (c.family === familyId) n++;
+  return n;
+}
+
+/**
+ * 餐桌任务（10 个）。
+ * check 接收 G：客户端为 playerView 后的状态（间谍无 family，按公开信息预估），
+ * 服务端为完整状态（判定准确）。
+ */
+export const TABLE_TASKS = [
+  {
+    id: 'few-favored',
+    name: '收敛锋芒',
+    desc: '不超过 3 个家族得宠',
+    check: (G) => {
+      const fates = computeFamilyFates(G.table);
+      return FAMILIES.filter((f) => fates[f.id].fate === 'favored').length <= 3;
+    },
+  },
+  {
+    id: 'many-disfavored',
+    name: '失势者众',
+    desc: '至少 2 个家族失宠',
+    check: (G) => {
+      const fates = computeFamilyFates(G.table);
+      return FAMILIES.filter((f) => fates[f.id].fate === 'disfavored').length >= 2;
+    },
+  },
+  {
+    id: 'some-5-disfavored',
+    name: '众矢之的',
+    desc: '某个家族在失宠区至少有 5 张牌',
+    check: (G) => FAMILIES.some((f) => countFamily(G.table.disfavored, f.id) >= 5),
+  },
+  {
+    id: 'each-1-disfavored',
+    name: '雨露均沾',
+    desc: '每个家族在失宠区都至少有 1 张牌',
+    check: (G) => FAMILIES.every((f) => countFamily(G.table.disfavored, f.id) >= 1),
+  },
+  ...FAMILIES.map((f) => ({
+    id: `${f.id}-disfavored`,
+    name: `${f.name}失宠`,
+    desc: `${f.name}在餐桌失宠`,
+    check: (G) => computeFamilyFates(G.table)[f.id].fate === 'disfavored',
+  })),
+];
+
+/**
+ * 领地任务（10 个）。
+ */
+export const TERRITORY_TASKS = [
+  {
+    id: '4-guard',
+    name: '坚盾',
+    desc: '你的领地至少有 4 张守卫',
+    check: (G, playerID) =>
+      G.players[playerID].territory.filter((c) => c.type === 'guard').length >= 4,
+  },
+  {
+    id: '3-noble',
+    name: '权贵',
+    desc: '你的领地至少有 3 张贵族',
+    check: (G, playerID) =>
+      G.players[playerID].territory.filter((c) => c.type === 'noble').length >= 3,
+  },
+  {
+    id: '3-spy',
+    name: '潜伏',
+    desc: '你的领地至少有 3 张间谍',
+    check: (G, playerID) =>
+      G.players[playerID].territory.filter((c) => c.type === 'spy').length >= 3,
+  },
+  {
+    id: '2-assassin',
+    name: '暗杀',
+    desc: '你的领地至少有 2 张刺客',
+    check: (G, playerID) =>
+      G.players[playerID].territory.filter((c) => c.type === 'assassin').length >= 2,
+  },
+  ...FAMILIES.map((f) => ({
+    id: `${f.id}-less`,
+    name: `${f.name}式微`,
+    desc: `你领地的${f.name}牌比下家少`,
+    check: (G, playerID) => {
+      const next = nextPlayerId(G, playerID);
+      return (
+        countFamily(G.players[playerID].territory, f.id) <
+        countFamily(G.players[next].territory, f.id)
+      );
+    },
+  })),
+];
+
+/** 按类别 + id 查找任务定义。 */
+export function getTask(category, taskId) {
+  const list = category === 'table' ? TABLE_TASKS : TERRITORY_TASKS;
+  return list.find((t) => t.id === taskId);
+}
+
+/** 判定所有玩家的任务完成情况并计算任务得分（每完成一个 +3 分）。 */
+export function computeTaskResults(G) {
+  const results = {};
+  for (const id of Object.keys(G.players)) {
+    const tasks = G.players[id].tasks;
+    const tableTask = tasks && tasks.table ? getTask('table', tasks.table) : undefined;
+    const territoryTask = tasks && tasks.territory ? getTask('territory', tasks.territory) : undefined;
+    const tableDone = tableTask ? tableTask.check(G, id) : false;
+    const territoryDone = territoryTask ? territoryTask.check(G, id) : false;
+    results[id] = {
+      table: tableDone,
+      territory: territoryDone,
+      score: (tableDone ? 3 : 0) + (territoryDone ? 3 : 0),
+    };
+  }
+  return results;
+}
+
 /**
  * boardgame.io Game 定义。
  */
@@ -226,7 +358,7 @@ export const QuancGame = {
          * 牌堆移除放在 play 阶段 onBegin（客户端乐观更新拿到的是
          * playerView 后的状态，deck 仅为数字张数，不能在 move 里直接操作牌组）。
          */
-        startGame: ({ G, ctx, playerID, events }) => {
+        startGame: ({ G, ctx, playerID, events, random }) => {
           if (!G.lobby || G.lobby.started) return INVALID_MOVE;
           if (playerID !== '0') return INVALID_MOVE; // 仅房主（创建者，座位 0）
           const participants = Object.keys(G.lobby.ready).sort((a, b) => Number(a) - Number(b));
@@ -239,6 +371,16 @@ export const QuancGame = {
           }
           G.playOrder = participants;
           G.playerCount = count;
+
+          // 抽取任务（不放回，每名玩家各 1 个餐桌任务 + 1 个领地任务）
+          const tableTasks = shuffleDeck(TABLE_TASKS, random).slice(0, count);
+          const territoryTasks = shuffleDeck(TERRITORY_TASKS, random).slice(0, count);
+          participants.forEach((id, i) => {
+            G.players[id].tasks = {
+              table: tableTasks[i].id,
+              territory: territoryTasks[i].id,
+            };
+          });
 
           G.lobby.started = true;
           G.log.push(`已有 ${count} 名玩家就位，游戏开始。`);
@@ -410,6 +552,7 @@ export const QuancGame = {
    * 玩家视角：
    * - 其他玩家的手牌仅显示数量；
    * - 未结束时，所有区域的间谍牌隐藏家族（对所有人不可见）；
+   * - 任务只对本人可见（其他玩家看不到任务内容）；
    * - 牌堆仅显示剩余张数。
    */
   playerView: ({ G, playerID }) => {
@@ -420,6 +563,7 @@ export const QuancGame = {
       players[id] = {
         hand: id === playerID ? p.hand : p.hand.length,
         territory: p.territory.map(c => maskCard(c, ended)),
+        tasks: id === playerID ? p.tasks : null,
       };
     }
     return {
@@ -436,14 +580,25 @@ export const QuancGame = {
 
   /**
    * 结束条件与结算：牌堆抽完（ended 标记）后结束，并计算得分。
+   * 总分 = 领地得分 + 任务得分（每完成一个任务 +3 分）。
    */
   endIf: ({ G }) => {
     if (!G.ended) return undefined;
     const { scores, fates } = computeScores(G);
+    const taskResults = computeTaskResults(G);
     const ids = Object.keys(G.players);
-    const max = Math.max(...ids.map(id => scores[id]));
-    const winners = ids.filter(id => scores[id] === max);
-    return { winners, scores, fates, reason: '牌堆抽完，游戏结束' };
+    const total = {};
+    for (const id of ids) total[id] = scores[id] + taskResults[id].score;
+    const max = Math.max(...ids.map(id => total[id]));
+    const winners = ids.filter(id => total[id] === max);
+    return {
+      winners,
+      scores: total,
+      territoryScores: scores,
+      taskResults,
+      fates,
+      reason: '牌堆抽完，游戏结束',
+    };
   },
 };
 

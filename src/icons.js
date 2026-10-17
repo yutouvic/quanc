@@ -31,16 +31,16 @@ export const FAMILY_ICONS = {
   ),
   // 蛇：S 形盘身 + 头
   serpent: svg(
-    '<path d="M17 6c2.5 1 2.5 4 .5 5.5S8 11 7 14s1 5 4 5.5c1.5.3 3-.3 4-1.5"/>' +
-      '<circle cx="18" cy="6" r="1.7"/>',
+    '<path d="M17 7.5c2.5 1 2.5 4 .5 5.5S8 11 7 14s1 5 4 5.5c1.5.3 3-.3 4-1.5"/>' +
+      '<circle cx="18" cy="7.5" r="1.7"/>',
   ),
-  // 鹿：分叉鹿角 + 竖长脸
+  // 鹿：分叉鹿角 + 竖长脸（脸缩短、鹿角更突出）
   stag: svg(
-    '<path d="M9.5 9 7 4 4.5 5M7 4 8 7"/>' +
-      '<path d="M14.5 9 17 4 19.5 5M17 4 16 7"/>' +
-      '<path d="M9.5 9h5l-1 12h-3z"/>' +
-      '<circle cx="10.5" cy="12" r=".6" fill="currentColor" stroke="none"/>' +
-      '<circle cx="13.5" cy="12" r=".6" fill="currentColor" stroke="none"/>',
+    '<path d="M9.5 10.5 6.5 4.5 3.5 6M6.5 4.5 8 8.5"/>' +
+      '<path d="M14.5 10.5 17.5 4.5 20.5 6M17.5 4.5 16 8.5"/>' +
+      '<path d="M9.5 10.5h5l-1 9h-3z"/>' +
+      '<circle cx="10.5" cy="13" r=".6" fill="currentColor" stroke="none"/>' +
+      '<circle cx="13.5" cy="13" r=".6" fill="currentColor" stroke="none"/>',
   ),
   // 熊：双圆耳 + 大圆脸
   bear: svg(
@@ -56,7 +56,7 @@ export const TYPE_ICONS = {
   assassin: svg(
     '<path d="M12 3l4 7-4 5-4-5z"/>' +
       '<path d="M8 15h8"/>' +
-      '<path d="M11 15v5"/>' +
+      '<path d="M12 15v5"/>' +
       '<path d="M10 20h4"/>',
   ),
   // 间谍：眼
@@ -66,18 +66,17 @@ export const TYPE_ICONS = {
   ),
   // 贵族：皇冠
   noble: svg(
-    '<path d="M4 18h16v1.5H4z"/>' +
-      '<path d="M5 8l4 4 3-5 3 5 4-4-1 8H6z"/>',
+    '<path d="M5 8l4 4 3-5 3 5 4-4-1 8H6z"/>',
   ),
   // 守卫：盾
   guard: svg(
-    '<path d="M12 3l8 3v6c0 4.5-3.2 6.5-8 9-4.8-2.5-8-4.5-8-9V6z"/>',
+    '<path d="M12 3l8 3v6c0 4.5-3.2 6.5-8 9-4.8-2.5-8-4.5-8-9V6z"/>' +
+      '<path d="M12 9l3 3-3 3-3-3z"/>',
   ),
 };
 
-/** 牌背水印：盾形 + 双菱形装饰（间谍背面 / 牌堆共用）。 */
+/** 牌背水印：问号（间谍背面 / 牌堆共用）。 */
 export const BACK_EMBLEM = svg(
-  '<path d="M12 3l7 3v5c0 4-3 6-7 8-4-2-7-4-7-8V6z"/>' +
-    '<path d="M12 7l2 2-2 2-2-2z"/>' +
-    '<path d="M12 13l2 2-2 2-2-2z"/>',
+  '<path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>' +
+    '<path d="M12 17h.01"/>',
 );

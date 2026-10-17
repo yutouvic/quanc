@@ -8,10 +8,9 @@
 /* ============ 基础 ============ */
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
-  /* 卡牌尺寸 */
-  --cw: 96px; --ch: 132px;
-  --mw: 52px; --mh: 70px;
-  --ink: #14100a;
+  /* 卡牌尺寸变量：响应式断点中按需缩小 */
+  --card-w: 76px; --card-h: 104px;
+  --mini-w: 46px; --mini-h: 62px;
 }
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
@@ -52,127 +51,108 @@ h2 + .hint { font-size: 12px; opacity: 0.5; margin-bottom: 14px; }
 /* ============ 卡牌通用 ============ */
 /* 外框：家族色（--c）明暗渐变，内衬在 .card-frame */
 .card {
-  --c: #d4a017;                 /* 家族色，由行内 style 覆盖 */
-  width: var(--cw); height: var(--ch);
-  padding: 2px;                 /* 外框厚度 */
-  border-radius: 13px;
+  --c: #888;
+  width: var(--card-w); height: var(--card-h);
+  padding: 2px; border-radius: 12px;
   background: linear-gradient(160deg,
     color-mix(in srgb, var(--c) 76%, #fff 18%) 0%,
     var(--c) 36%,
     color-mix(in srgb, var(--c) 50%, #000 42%) 64%,
     color-mix(in srgb, var(--c) 68%, #fff 8%) 100%);
   box-shadow:
-    0 10px 22px rgba(0,0,0,0.5),
+    0 8px 18px rgba(0,0,0,0.5),
     0 2px 5px rgba(0,0,0,0.4),
     0 0 0 1px color-mix(in srgb, var(--c) 40%, transparent);
-  cursor: pointer; user-select: none;
-  transition: transform 0.16s ease, box-shadow 0.16s ease;
+  cursor: pointer; user-select: none; position: relative;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 .card:hover {
-  transform: translateY(-7px);
+  transform: translateY(-6px);
   box-shadow:
-    0 16px 30px rgba(0,0,0,0.55),
+    0 14px 26px rgba(0,0,0,0.55),
     0 0 0 1px color-mix(in srgb, var(--c) 65%, #fff 12%),
-    0 0 18px color-mix(in srgb, var(--c) 45%, transparent);
+    0 0 16px color-mix(in srgb, var(--c) 45%, transparent);
 }
-.card.selected {
-  transform: translateY(-10px);
+.card.card-selected {
+  transform: translateY(-8px);
   box-shadow:
     0 0 0 3px #ffd966,
-    0 0 24px rgba(255,217,102,0.6),
-    0 14px 28px rgba(0,0,0,0.55);
+    0 0 22px rgba(255,217,102,0.6),
+    0 12px 24px rgba(0,0,0,0.55);
 }
 
-/* 内衬 */
 .card-frame {
-  width: 100%; height: 100%;
-  border-radius: 11px;
+  width: 100%; height: 100%; border-radius: 10px;
   position: relative; overflow: hidden;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;
-  /* 家族色暗底 + 顶部高光 + 内描边 */
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
   background:
     radial-gradient(130% 90% at 28% 16%, rgba(255,255,255,0.18), transparent 52%),
     linear-gradient(165deg, color-mix(in srgb, var(--c) 52%, #1c1208), color-mix(in srgb, var(--c) 40%, #000 44%) 66%);
   box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06);
 }
-
-/* 噪点纹理 */
 .card-tex {
   position: absolute; inset: 0;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
   mix-blend-mode: overlay; opacity: 0.35; pointer-events: none;
 }
-
-/* 对角线高光 */
 .card-gloss {
   position: absolute; inset: 0;
   background: linear-gradient(115deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.05) 24%, transparent 42%);
   mix-blend-mode: screen; pointer-events: none;
 }
-
-/* 家族徽章：圆形 + 光晕，所有卡牌统一显示家族动物 */
 .card-emblem {
-  width: 52px; height: 52px; border-radius: 50%;
+  width: 50px; height: 50px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  font-size: 30px; line-height: 1; position: relative; z-index: 1;
+  font-size: 28px; color: #f2ead8; position: relative; z-index: 1;
   background: radial-gradient(circle at 34% 28%, rgba(255,255,255,0.16), rgba(0,0,0,0.28) 72%);
   border: 1px solid color-mix(in srgb, var(--c) 70%, #fff 8%);
   box-shadow:
     inset 0 1px 3px rgba(255,255,255,0.22),
     0 2px 7px rgba(0,0,0,0.45),
     0 0 14px color-mix(in srgb, var(--c) 55%, transparent);
-  filter: saturate(1.05);
 }
-.card-emblem span { filter: drop-shadow(0 2px 3px rgba(0,0,0,0.5)); }
-
 .card-fam {
-  font-size: 14px; font-weight: 700; letter-spacing: 2px; position: relative; z-index: 1;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+  font-size: 13px; font-weight: 700; letter-spacing: 1px;
+  position: relative; z-index: 1; text-shadow: 0 1px 2px rgba(0,0,0,0.6);
 }
-
-/* 类型徽章（底部胶囊） */
 .card-type {
   font-size: 10px; line-height: 1.6; padding: 0 8px; border-radius: 999px;
   position: relative; z-index: 1;
-  background: rgba(0,0,0,0.38);
-  border: 1px solid rgba(255,255,255,0.14);
-  color: rgba(242,234,216,0.85);
+  display: inline-flex; align-items: center; gap: 3px;
+  background: rgba(0,0,0,0.38); border: 1px solid rgba(255,255,255,0.14); color: rgba(242,234,216,0.85);
 }
+.card-type .ico { font-size: 10px; }
 .card-weight {
   position: absolute; top: -5px; right: -5px; z-index: 2;
   background: #ffd966; color: #1a1a1a; font-size: 10px; font-weight: 700;
-  border-radius: 999px; padding: 1px 6px;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.5);
+  border-radius: 999px; padding: 1px 6px; box-shadow: 0 1px 4px rgba(0,0,0,0.5);
 }
 
-/* ============ 类型差异化（外框/内衬/徽章仍为家族色，类型靠徽章色 + 细节特效区分） ============ */
-/* 类型徽章配色 */
-.card-assassin .card-type { background: rgba(192,57,43,0.32); border-color: rgba(192,57,43,0.7); color: #ffd9d4; }
-.card-spy .card-type      { background: rgba(124,141,181,0.28); border-color: rgba(124,141,181,0.62); color: #d4dcf0; }
-.card-noble .card-type    { background: rgba(212,160,23,0.32); border-color: rgba(212,160,23,0.72); color: #ffecb3; }
-.card-guard .card-type    { background: rgba(154,164,178,0.28); border-color: rgba(154,164,178,0.62); color: #e8edf3; }
-
-/* 贵族：流光扫过（内衬已与其他卡牌统一为加亮渐变） */
+/* 类型差异化（外框/内衬/纹章仍为家族色） */
 .card-noble .card-frame::after {
   content: ''; position: absolute; top: -30%; left: -70%;
   width: 45%; height: 160%;
   background: linear-gradient(100deg, transparent, rgba(255,255,255,0.5) 50%, transparent);
   transform: skewX(-22deg);
-  animation: sheen 3.2s ease-in-out infinite;
+  will-change: transform;
+  animation: card-sheen 3.2s ease-in-out infinite;
   pointer-events: none;
 }
-@keyframes sheen {
-  0%, 55% { left: -70%; }
-  100% { left: 135%; }
+/* 流光用 transform 位移（合成器处理），不修改 left，避免逐帧布局/重绘 */
+@keyframes card-sheen {
+  0%, 55% { transform: skewX(-22deg) translateX(0); }
+  100% { transform: skewX(-22deg) translateX(455.56%); }
 }
-
-/* 守卫：斜切暗纹（外框仍是家族色） */
 .card-guard .card-tex {
-  background-image: repeating-linear-gradient(45deg, rgba(0,0,0,0.45) 0 2px, transparent 2px 6px);
+  background-image: repeating-linear-gradient(45deg, rgba(0,0,0,0.55) 0 2px, transparent 2px 6px);
   opacity: 0.6;
 }
+.card-assassin .card-type { background: rgba(192,57,43,0.32); border-color: rgba(192,57,43,0.7); color: #ffd9d4; }
+.card-spy .card-type { background: rgba(124,141,181,0.28); border-color: rgba(124,141,181,0.62); color: #d4dcf0; }
+.card-noble .card-type { background: rgba(212,160,23,0.32); border-color: rgba(212,160,23,0.72); color: #ffecb3; }
+.card-guard .card-type { background: rgba(154,164,178,0.28); border-color: rgba(154,164,178,0.62); color: #e8edf3; }
 
-/* ============ 牌背（间谍背面 / 牌堆） ============ */
+/* 牌背（间谍背面 / 牌堆） */
 .card-back {
   --c: #7c8db5;
   background: linear-gradient(160deg, #3d4f74, #23304d 45%, #161f36 70%, #2b3a5c);
@@ -184,12 +164,7 @@ h2 + .hint { font-size: 12px; opacity: 0.5; margin-bottom: 14px; }
     linear-gradient(165deg, #26334f, #141c30 66%);
   box-shadow: inset 0 0 0 1px rgba(160,180,220,0.25);
 }
-.card-back .card-emblem {
-  font-size: 26px;
-  border-color: rgba(160,180,220,0.45);
-  background: radial-gradient(circle at 34% 28%, rgba(255,255,255,0.10), rgba(0,0,0,0.34) 72%);
-  color: #aebbd4;
-}
+.card-back .card-emblem { color: #aebbd4; border-color: rgba(160,180,220,0.45); }
 
 /* 牌堆：负边距堆叠 */
 .pile { display: flex; padding-left: 18px; }
@@ -200,7 +175,7 @@ h2 + .hint { font-size: 12px; opacity: 0.5; margin-bottom: 14px; }
 
 /* ============ 区域小牌（复用大卡结构，仅按比例缩小） ============ */
 .card-mini {
-  width: var(--mw); height: var(--mh);
+  width: var(--mini-w); height: var(--mini-h);
   padding: 1px; border-radius: 7px;
 }
 .card-mini .card-frame { border-radius: 6px; gap: 1px; }
@@ -209,15 +184,26 @@ h2 + .hint { font-size: 12px; opacity: 0.5; margin-bottom: 14px; }
 .card-mini .card-type { font-size: 7px; padding: 0 4px; gap: 1px; line-height: 1.4; }
 .card-mini .card-type .ico { font-size: 7px; }
 .card-mini .card-weight { top: -3px; right: -3px; font-size: 7px; padding: 0 3px; }
+.card-mini:hover { transform: translateY(-3px); }
+.card-disabled { opacity: 0.45; cursor: not-allowed; }
 
 /* ============ 响应式与无障碍 ============ */
+@media (max-width: 768px) {
+  :root {
+    --card-w: 66px; --card-h: 92px;
+    --mini-w: 40px; --mini-h: 54px;
+  }
+  .card-emblem { width: 42px; height: 42px; font-size: 24px; }
+  .card-mini .card-emblem { width: 22px; height: 22px; font-size: 13px; }
+}
 @media (max-width: 480px) {
-  :root { --cw: 78px; --ch: 108px; --mw: 44px; --mh: 60px; }
-  .card-emblem { width: 44px; height: 44px; font-size: 26px; }
+  :root { --card-w: 60px; --card-h: 84px; --mini-w: 36px; --mini-h: 50px; }
+  .card-fam { font-size: 12px; }
+  .card-type { font-size: 10px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .card-noble .card-frame::after { animation: none; }
-  .card, .card:hover, .card.selected { transition: none; }
+  .card.card-enter, .card.card-flip { animation: none; }
 }
 </style>
 </head>
@@ -233,14 +219,14 @@ h2 + .hint { font-size: 12px; opacity: 0.5; margin-bottom: 14px; }
       <div class="icon-cell"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12.5" r="3.8"/><path d="M12 4.6v2M6.6 7l1.4 1.4M4.6 12.5H7M6.6 18l1.4-1.4M12 20.4v-2M17.4 18l-1.4-1.4M19.4 12.5H17M17.4 7 16 8.4"/></svg><span>狮族</span></div>
       <div class="icon-cell"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6L11 10C7 9.5 3.5 9.5 2 10.5C1.8 12 3 13.8 5 14.2C8 14.8 10 14.8 11.5 14.5L12 18L12.5 14.5C14 14.8 16 14.8 19 14.2C21 13.8 22.2 12 22 10.5C20.5 9.5 17 9.5 13 10L12 6z"/></svg><span>鹰族</span></div>
       <div class="icon-cell"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 6 8l5 1.5z"/><path d="M12 3.5 18 8l-5 1.5z"/><path d="M6.5 8h11L16 16.5 12 21.5 8 16.5z"/><circle cx="10" cy="12" r=".6" fill="currentColor" stroke="none"/><circle cx="14" cy="12" r=".6" fill="currentColor" stroke="none"/></svg><span>狼族</span></div>
-      <div class="icon-cell"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M17 6c2.5 1 2.5 4 .5 5.5S8 11 7 14s1 5 4 5.5c1.5.3 3-.3 4-1.5"/><circle cx="18" cy="6" r="1.7"/></svg><span>蛇族</span></div>
-      <div class="icon-cell"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 9 7 4 4.5 5M7 4 8 7"/><path d="M14.5 9 17 4 19.5 5M17 4 16 7"/><path d="M9.5 9h5l-1 12h-3z"/><circle cx="10.5" cy="12" r=".6" fill="currentColor" stroke="none"/><circle cx="13.5" cy="12" r=".6" fill="currentColor" stroke="none"/></svg><span>鹿族</span></div>
+      <div class="icon-cell"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M17 7.5c2.5 1 2.5 4 .5 5.5S8 11 7 14s1 5 4 5.5c1.5.3 3-.3 4-1.5"/><circle cx="18" cy="7.5" r="1.7"/></svg><span>蛇族</span></div>
+      <div class="icon-cell"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 10.5 6.5 4.5 3.5 6M6.5 4.5 8 8.5"/><path d="M14.5 10.5 17.5 4.5 20.5 6M17.5 4.5 16 8.5"/><path d="M9.5 10.5h5l-1 9h-3z"/><circle cx="10.5" cy="13" r=".6" fill="currentColor" stroke="none"/><circle cx="13.5" cy="13" r=".6" fill="currentColor" stroke="none"/></svg><span>鹿族</span></div>
       <div class="icon-cell"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="8.5" cy="8.5" r="2.6"/><circle cx="15.5" cy="8.5" r="2.6"/><circle cx="12" cy="14.5" r="5.5"/></svg><span>熊族</span></div>
-      <div class="icon-cell"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l4 7-4 5-4-5z"/><path d="M8 15h8"/><path d="M11 15v5"/><path d="M10 20h4"/></svg><span>刺客</span></div>
+      <div class="icon-cell"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l4 7-4 5-4-5z"/><path d="M8 15h8"/><path d="M12 15v5"/><path d="M10 20h4"/></svg><span>刺客</span></div>
       <div class="icon-cell"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-5.5 10-5.5S22 12 22 12s-3.5 5.5-10 5.5S2 12 2 12z"/><circle cx="12" cy="12" r="2.8"/></svg><span>间谍</span></div>
-      <div class="icon-cell"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18h16v1.5H4z"/><path d="M5 8l4 4 3-5 3 5 4-4-1 8H6z"/></svg><span>贵族</span></div>
-      <div class="icon-cell"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 4.5-3.2 6.5-8 9-4.8-2.5-8-4.5-8-9V6z"/></svg><span>守卫</span></div>
-      <div class="icon-cell"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4-3 6-7 8-4-2-7-4-7-8V6z"/><path d="M12 7l2 2-2 2-2-2z"/><path d="M12 13l2 2-2 2-2-2z"/></svg><span>牌背</span></div>
+      <div class="icon-cell"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8l4 4 3-5 3 5 4-4-1 8H6z"/></svg><span>贵族</span></div>
+      <div class="icon-cell"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 4.5-3.2 6.5-8 9-4.8-2.5-8-4.5-8-9V6z"/><path d="M12 9l3 3-3 3-3-3z"/></svg><span>守卫</span></div>
+      <div class="icon-cell"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg><span>牌背</span></div>
     </div>
   </section>
 
@@ -305,7 +291,7 @@ h2 + .hint { font-size: 12px; opacity: 0.5; margin-bottom: 14px; }
 <script>
   // 仅用于演示「选中态」：点击切换选中
   document.querySelectorAll('.card').forEach(c => {
-    c.addEventListener('click', () => c.classList.toggle('selected'));
+    c.addEventListener('click', () => c.classList.toggle('card-selected'));
   });
 </script>
 </body>

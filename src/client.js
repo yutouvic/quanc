@@ -5,7 +5,7 @@
 
 import { Client } from 'boardgame.io/client';
 import { SocketIO } from 'boardgame.io/multiplayer';
-import { QuancGame, computeFamilyFates, pLabel } from './game.js';
+import { QuancGame, computeFamilyFates, pLabel, getTask } from './game.js';
 import { FAMILIES, getFamily } from './cards.js';
 import { FAMILY_ICONS, TYPE_ICONS, BACK_EMBLEM } from './icons.js';
 
@@ -301,8 +301,8 @@ function renderPlayers(G, ctx, playerID, fates) {
 /**
  * 餐桌渲染：
  * - 得宠区 / 失宠区共用中间一条家族计分板（只显示得宠状态，不显示数字）；
- * - 6 个家族按 FAMILIES 顺序从左到右成列，间谍单独占最右列；
- * - 非间谍牌按家族归入对应列：得宠牌在计分板上方向上叠放，失宠牌在下方向下叠放。
+ * - 6 个家族按 FAMILIES 顺序从左到右成列；未翻开的间谍暂存最右侧间谍列；
+ * - 游戏结束间谍翻开（带 family）后，自动归入对应的家族列，间谍列随之隐藏。
  */
 function renderTable(G, fates) {
   const container = $('#table');
@@ -311,24 +311,35 @@ function renderTable(G, fates) {
   const favored = G.table.favored || [];
   const disfavored = G.table.disfavored || [];
 
-  // 7 列：6 个家族 + 最右侧间谍列
+  // 6 个家族列
   const cols = FAMILIES.map(f => ({
     kind: 'family',
     family: f,
     favored: favored.filter(c => c.family === f.id),
     disfavored: disfavored.filter(c => c.family === f.id),
   }));
-  cols.push({
-    kind: 'spy',
-    favored: favored.filter(c => c.type === 'spy'),
-    disfavored: disfavored.filter(c => c.type === 'spy'),
-  });
+
+  // 间谍列仅收集尚未翻开的间谍（faceDown）；结束后翻开带 family，已归入家族列
+  const faceDownSpies = [
+    ...favored.filter(c => c.type === 'spy' && c.faceDown),
+    ...disfavored.filter(c => c.type === 'spy' && c.faceDown),
+  ];
+  if (faceDownSpies.length > 0) {
+    cols.push({
+      kind: 'spy',
+      favored: favored.filter(c => c.type === 'spy' && c.faceDown),
+      disfavored: disfavored.filter(c => c.type === 'spy' && c.faceDown),
+    });
+  }
+
+  // 列数随是否含间谍列动态变化（结束后 6 列）
+  const gridStyle = `grid-template-columns: repeat(${cols.length}, minmax(0, 1fr))`;
 
   // 得宠（上）/ 失宠（下）牌行；得宠列 wrap-reverse 向上叠放，失宠列正常向下叠放
   const cardsRow = (zoneKey, sideText, sideCls) =>
     el('div', { class: 'board-row' }, [
       el('div', { class: `board-side ${sideCls}` }, [el('span', { text: sideText })]),
-      el('div', { class: 'board-grid' }, cols.map((col) => {
+      el('div', { class: 'board-grid', style: gridStyle }, cols.map((col) => {
         const cls = ['board-col', `board-col-${zoneKey}`];
         if (col.kind === 'spy') cls.push('board-col-spy');
         const style = col.kind === 'family' ? `--c:${col.family.color}` : '';
@@ -358,7 +369,7 @@ function renderTable(G, fates) {
     cardsRow('favored', '得宠', 'board-side-favored'),
     el('div', { class: 'board-row' }, [
       el('div', { class: 'board-side' }),
-      el('div', { class: 'board-grid board-head' }, headCells),
+      el('div', { class: 'board-grid board-head', style: gridStyle }, headCells),
     ]),
     cardsRow('disfavored', '失宠', 'board-side-disfavored'),
   ]);
@@ -517,6 +528,41 @@ function renderLog(G) {
   }
 }
 
+/**
+ * 任务面板：显示当前玩家的餐桌 / 领地任务及其完成状态。
+ * 实时状态基于客户端可见信息（playerView 后 G）预估；最终以结束结算为准。
+ */
+function renderTaskPanel(G, playerID) {
+  const container = $('#task-panel');
+  if (!container) return;
+  const me = G.players[playerID];
+  if (!me || !me.tasks) {
+    container.style.display = 'none';
+    container.innerHTML = '';
+    return;
+  }
+  container.style.display = '';
+
+  const items = [
+    { label: '餐桌任务', task: getTask('table', me.tasks.table) },
+    { label: '领地任务', task: getTask('territory', me.tasks.territory) },
+  ];
+
+  container.innerHTML = '';
+  for (const { label, task } of items) {
+    if (!task) continue;
+    const done = task.check(G, playerID);
+    container.appendChild(el('div', { class: `task-item ${done ? 'task-done' : ''}` }, [
+      el('div', { class: 'task-head' }, [
+        el('span', { class: 'task-label', text: label }),
+        el('span', { class: 'task-status', text: done ? '已完成' : '未完成' }),
+      ]),
+      el('div', { class: 'task-name', text: task.name }),
+      el('div', { class: 'task-desc', text: task.desc }),
+    ]));
+  }
+}
+
 function renderGameover(ctx) {
   const box = $('#gameover');
   if (!ctx.gameover) {
@@ -524,7 +570,7 @@ function renderGameover(ctx) {
     box.innerHTML = '';
     return;
   }
-  const { winners, scores, fates } = ctx.gameover;
+  const { winners, scores, territoryScores, taskResults, fates } = ctx.gameover;
   const nicknames = nicknameMap();
   box.style.display = 'block';
   box.innerHTML = '';
@@ -536,10 +582,14 @@ function renderGameover(ctx) {
   const rows = Object.keys(scores).map(id => {
     const scoreEl = el('span', { class: 'go-score', text: `${justEnded ? 0 : scores[id]} 分` });
     if (justEnded) animateScore(scoreEl, scores[id]);
-    return el('div', { class: 'go-row' }, [
-      el('span', { text: playerNameText(id, nicknames) }),
-      scoreEl,
-    ]);
+    const tr = taskResults ? taskResults[id] : null;
+    const terr = territoryScores ? territoryScores[id] : undefined;
+    const detail = [];
+    if (terr !== undefined) detail.push(`领地 ${terr}`);
+    if (tr) detail.push(`任务 +${tr.score}`);
+    const children = [el('span', { text: playerNameText(id, nicknames) }), scoreEl];
+    if (detail.length) children.push(el('span', { class: 'go-detail', text: detail.join(' · ') }));
+    return el('div', { class: 'go-row' }, children);
   });
   box.appendChild(el('div', { class: 'go-scores' }, rows));
   const fateRows = FAMILIES.map(f => {
@@ -565,6 +615,7 @@ function render(state) {
   renderHeader(G);
   renderPlayers(G, ctx, playerID, fates);
   renderTable(G, fates);
+  renderTaskPanel(G, playerID);
   // 有刺客待结算时禁用选牌
   const canPick = state.isActive && !ctx.gameover && !G.pendingAssassin;
   renderHand(G, playerID, canPick);
@@ -845,7 +896,7 @@ function resetToSetup(message) {
   clearSession(); // 主动离开后不再自动恢复
 
   // 清空游戏界面残留
-  for (const sel of ['#players', '#table', '#log', '#hand', '#play-panel', '#gameover', '#room-seats', '#room-action']) {
+  for (const sel of ['#players', '#table', '#log', '#hand', '#play-panel', '#task-panel', '#gameover', '#room-seats', '#room-action']) {
     $(sel).innerHTML = '';
   }
   $('#gameover').style.display = 'none';
