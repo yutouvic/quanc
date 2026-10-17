@@ -40,27 +40,25 @@
     0 12px 24px rgba(0,0,0,0.55);
 }
 .r7-card-dimmed { opacity: 0.45; filter: grayscale(0.6); }
-.r7-card-key { overflow: hidden; }
+/* 关键牌：边框脉冲内发光，颜色跟随当前规则色（--kc 由 JS 注入）。
+   性能优化：阴影固定在伪元素上，仅动画 opacity。 */
+.r7-card-key { --kc: #ffd966; }
 .r7-card-key::after {
   content: '';
-  position: absolute;
-  top: -30%; left: -70%;
-  width: 45%; height: 160%;
-  background: linear-gradient(100deg, transparent, rgba(255,255,255,0.6) 50%, transparent);
-  transform: skewX(-22deg);
-  animation: r7-card-sheen 2s ease-in-out infinite;
+  position: absolute; inset: 0;
+  border-radius: inherit;
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--kc) 90%, transparent),
+    0 0 14px 4px color-mix(in srgb, var(--kc) 65%, transparent);
+  animation: r7-glow-pulse 1.6s ease-in-out infinite;
   pointer-events: none;
-}
-@keyframes r7-card-sheen {
-  0%, 55% { transform: skewX(-22deg) translateX(0); }
-  100% { transform: skewX(-22deg) translateX(455.56%); }
 }
 .r7-card-mini {
   width: var(--mini-w); height: var(--mini-h);
   border-radius: 7px;
 }
-.r7-card-mini .r7-num { font-size: 20px; }
-.r7-card-mini .r7-color { font-size: 8px; }
+.r7-card-mini .r7-num { font-size: 26px; }
+.r7-card-mini .r7-color { font-size: 12px; font-weight: 600; }
 .r7-card-mini:hover { transform: translateY(-3px); }
 
 /* ========== Red7 规则区 / 画布 ========== */
@@ -83,9 +81,9 @@
 .r7-rule-text { font-size: 16px; font-weight: 700; }
 .r7-rule-card-current { margin-left: auto; display: flex; align-items: center; }
 
-/* 规则一览（7 种颜色规则，当前规则高亮） */
-.r7-rule-list { margin-top: 12px; }
-.r7-rules { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; margin-top: 6px; }
+/* 规则一览（7 种颜色规则，当前规则高亮）：紧贴上方当前规则条 */
+.r7-rule-list { margin-top: -6px; }
+.r7-rules { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
 .r7-rule-card {
   --c: #888;
   display: flex; flex-direction: column; align-items: center; gap: 2px;
@@ -94,20 +92,104 @@
   border: 1px solid color-mix(in srgb, var(--c) 45%, transparent);
   opacity: 0.75;
 }
+/* 当前规则卡：边框加粗（无脉冲，用 margin 抵消边框增宽避免布局抖动） */
 .r7-rule-card-active {
   opacity: 1;
-  border-color: var(--c);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--c) 55%, transparent), 0 0 12px color-mix(in srgb, var(--c) 45%, transparent);
+  border: 3px solid var(--c);
+  margin: -2px;
 }
 .r7-rule-card-name { font-size: 13px; font-weight: 800; }
 .r7-rule-card-desc { font-size: 10px; opacity: 0.85; }
 
-.r7-canvas { margin-top: 12px; }
-.r7-canvas-cards { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.r7-canvas { margin-top: 4px; }
+.r7-canvas-cards { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* ========== Red7 手牌区提示（字号调大） ========== */
+.r7-hint { font-size: 15px; opacity: 0.85; line-height: 1.5; }
+.r7-hint-forced { color: #ff8a80; font-weight: 700; opacity: 1; }
+/* 建议结束回合：红色提示 + 按钮红色脉冲 */
+.r7-hint-suggest { color: #ff8a80; font-weight: 600; opacity: 1; }
+/* 脉冲性能优化：阴影固定在伪元素上，仅动画 opacity（合成器处理，不逐帧重绘阴影） */
+.btn-end-suggest { position: relative; }
+.btn-end-suggest::after {
+  content: '';
+  position: absolute; inset: 0;
+  border-radius: inherit;
+  box-shadow: 0 0 14px 3px rgba(255,82,82,0.55);
+  animation: r7-glow-pulse 1.5s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* ========== Red7 强制行动：行动面板红色脉冲强调 ========== */
+.play-panel.r7-forced {
+  position: relative;
+  border: 2px solid #ff5252;
+  border-radius: 12px;
+  padding: 10px;
+  background: rgba(229,57,53,0.08);
+}
+.play-panel.r7-forced::before {
+  content: '';
+  position: absolute; inset: 0;
+  border-radius: inherit;
+  box-shadow: 0 0 18px 3px rgba(255,82,82,0.55);
+  animation: r7-glow-pulse 1.2s ease-in-out infinite;
+  pointer-events: none;
+}
+/* 通用发光脉冲：仅对 opacity 做动画，避免逐帧重绘 box-shadow 占用 CPU */
+@keyframes r7-glow-pulse {
+  0%, 100% { opacity: 0.25; }
+  50% { opacity: 1; }
+}
+
+/* ========== Red7 新手提示：选中手牌后的行动预览（合并卡片） ========== */
+.r7-tip {
+  --c: #888;
+  position: relative;
+  border-radius: 10px; overflow: hidden;
+  background:
+    radial-gradient(130% 90% at 15% 0%, color-mix(in srgb, var(--c) 16%, transparent), transparent 60%),
+    rgba(255,255,255,0.05);
+  border: 1px solid color-mix(in srgb, var(--c) 45%, transparent);
+}
+/* 边框脉冲：阴影固定在伪元素上，仅动画 opacity（不逐帧重绘阴影）。
+   卡片 overflow:hidden，用 inset 内发光避免外发光被裁剪。 */
+.r7-tip::before {
+  content: '';
+  position: absolute; inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--c) 80%, transparent), inset 0 0 16px color-mix(in srgb, var(--c) 55%, transparent);
+  animation: r7-glow-pulse 1.8s ease-in-out infinite;
+  pointer-events: none;
+}
+.r7-tip-head {
+  padding: 7px 12px;
+  font-size: 16px; font-weight: 800; letter-spacing: 2px; color: #f5d67b;
+  background: rgba(0,0,0,0.25);
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.r7-tip-body {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+.r7-tip-section {
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 9px 12px;
+}
+.r7-tip-section + .r7-tip-section { border-left: 1px solid rgba(255,255,255,0.08); }
+.r7-tip-section-off { opacity: 0.55; }
+@media (max-width: 560px) {
+  .r7-tip-section + .r7-tip-section { border-left: none; border-top: 1px solid rgba(255,255,255,0.08); }
+}
+.r7-preview-title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 14px; font-weight: 700; }
+.r7-preview-state { font-size: 11px; font-weight: 700; line-height: 1.5; padding: 1px 8px; border-radius: 999px; }
+.r7-preview-state-ok { background: rgba(95,208,138,0.22); color: #7fe0a3; }
+.r7-preview-state-off { background: rgba(255,255,255,0.1); color: #aaa; }
+.r7-preview-line { font-size: 13px; line-height: 1.55; opacity: 0.92; }
+.r7-preview-fx { color: #ffd966; font-weight: 600; }
 
 /* ========== Red7 调色盘 ========== */
 .r7-palette { min-width: 180px; }
-.r7-winning { border-color: rgba(90,200,130,0.7); }
 .r7-eliminated { opacity: 0.55; }
 .r7-badge {
   font-size: 11px; font-weight: 700; line-height: 1.4;
@@ -126,7 +208,7 @@
 @media (max-width: 480px) {
   .r7-num { font-size: 30px; }
   .r7-color { font-size: 11px; }
-  .r7-card-mini .r7-num { font-size: 18px; }
+  .r7-card-mini .r7-num { font-size: 22px; }
   .r7-rule { gap: 10px; padding: 10px 12px; }
   .r7-rule-chip { width: 38px; height: 38px; }
   .r7-rule-color { font-size: 17px; }
@@ -139,8 +221,11 @@
   .r7-card-mini:hover { transform: none; }
 }
 
-/* 系统偏好「减少动态效果」时停用 Red7 选中态动画与关键牌流光 */
+/* 系统偏好「减少动态效果」时停用 Red7 选中态动画、关键牌脉冲与强制面板脉冲 */
 @media (prefers-reduced-motion: reduce) {
   .r7-card.r7-card-selected { animation: none; }
-  .r7-card-key::after { animation: none; }
+  .r7-card-key::after { animation: none; opacity: 0.8; }
+  .play-panel.r7-forced::before { animation: none; opacity: 0.8; }
+  .btn-end-suggest::after { animation: none; opacity: 0.8; }
+  .r7-tip::before { animation: none; opacity: 0.8; }
 }

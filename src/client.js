@@ -19,6 +19,7 @@ let client = null;
 let currentState = null;     // 最近一次渲染所用的状态
 let currentGame = null;      // 当前选中的游戏条目（registry 中的元数据 + game 对象）
 let selectedIndex = null;    // 当前选中的手牌索引
+let prevForcedAction = false; // 上一帧是否处于强制行动（用于自动定位只触发一次）
 let currentMatchID = null;   // 当前对局 ID（用于展示与复制）
 let roomInfo = null;         // 当前房间信息 { matchID, playerID, credentials }
 let inGameScreen = false;    // 当前是否已切换到游戏界面
@@ -27,6 +28,7 @@ let seenCardIds = new Set(); // 已出现过的卡牌 id，用于给新牌播放
 let prevEnded = false;       // 上一帧是否已结束（用于一次性触发翻牌/得分滚动）
 let justEnded = false;       // 本帧是否为游戏结束瞬间
 const loadedCSS = new Set(); // 已动态加载的游戏 CSS 路径（去重）
+const CSS_VERSION = '6';     // CSS 版本号：样式更新时递增，防止浏览器缓存旧样式
 
 /** 当前游戏的 boardgame.io 名称（大厅路由键），未选择时为空串。 */
 function gameName() {
@@ -270,10 +272,23 @@ function nicknameMap() {
   );
 }
 
-/** 玩家展示文案：数字 + 昵称（如「1 · 张三」）。 */
-function playerNameText(id, nicknames) {
-  const name = nicknames && nicknames.get(String(id));
-  return `${pLabel(id)}${name ? ` · ${name}` : ''}`;
+/** 玩家编号徽章节点：圆形徽章显示座号（不分颜色，避免与家族/规则色混淆）。 */
+function playerNoBadge(id) {
+  return el('span', {
+    class: 'player-no',
+    text: String(pLabel(id)),
+  });
+}
+
+/** 玩家标识节点：编号徽章 + 昵称（编号与名称视觉分离），自己的区域附加醒目「你」徽章。 */
+function playerNameNode(id, nicknames, { me = false } = {}) {
+  const name = (nicknames && nicknames.get(String(id))) || '';
+  const kids = [
+    playerNoBadge(id),
+    el('span', { class: 'player-name', text: name }),
+  ];
+  if (me) kids.push(el('span', { class: 'player-me', text: '你' }));
+  return el('span', { class: 'player-tag' }, kids);
 }
 
 function renderPlayers(G, ctx, playerID, fates) {
@@ -295,10 +310,7 @@ function renderPlayers(G, ctx, playerID, fates) {
     }
     const node = el('div', { class: `territory ${isCurrent ? 'active' : ''} ${isMe ? 'me' : ''}` }, [
       el('div', { class: 'territory-head' }, [
-        el('span', {
-          class: 'territory-name',
-          text: `${playerNameText(id, nicknames)}${isMe ? '（你）' : ''}`,
-        }),
+        el('span', { class: 'territory-name' }, [playerNameNode(id, nicknames, { me: isMe })]),
         el('span', { class: 'territory-score', text: `得分 ${preview}` }),
       ]),
       el('div', { class: 'territory-cards' }, [
@@ -582,10 +594,12 @@ function renderGameover(ctx) {
   box.style.display = 'block';
   box.innerHTML = '';
   box.appendChild(el('h2', { text: '游戏结束' }));
-  box.appendChild(el('p', {
-    class: 'go-summary',
-    text: `获胜者：${winners.map(w => playerNameText(w, nicknames)).join('、')}`,
-  }));
+  box.appendChild(el('p', { class: 'go-summary' }, [
+    el('span', { text: '获胜者：' }),
+    ...winners.flatMap((w, i) => (i === 0
+      ? [playerNameNode(w, nicknames)]
+      : [el('span', { text: '、' }), playerNameNode(w, nicknames)])),
+  ]));
   const rows = Object.keys(scores).map(id => {
     const scoreEl = el('span', { class: 'go-score', text: `${justEnded ? 0 : scores[id]} 分` });
     if (justEnded) animateScore(scoreEl, scores[id]);
@@ -594,7 +608,7 @@ function renderGameover(ctx) {
     const detail = [];
     if (terr !== undefined) detail.push(`领地 ${terr}`);
     if (tr) detail.push(`任务 +${tr.score}`);
-    const children = [el('span', { text: playerNameText(id, nicknames) }), scoreEl];
+    const children = [playerNameNode(id, nicknames), scoreEl];
     if (detail.length) children.push(el('span', { class: 'go-detail', text: detail.join(' · ') }));
     return el('div', { class: 'go-row' }, children);
   });
@@ -638,20 +652,21 @@ function red7CardLabel(card) {
   return `${card.colorName}${card.number}`;
 }
 
-/** 清空 Red7 的选中手牌。 */
+/** 清空 Red7 的选中手牌与强制行动标记。 */
 function resetRed7Selection() {
   selectedIndex = null;
+  prevForcedAction = false;
 }
 
-/** Red7 卡牌节点：数字 + 颜色底。 */
-function red7CardNode(card, { mini = false, selected = false, onClick = undefined, dimmed = false, key = false } = {}) {
+/** Red7 卡牌节点：数字 + 颜色底；keyColor 用于关键牌脉冲特效（跟随当前规则色）。 */
+function red7CardNode(card, { mini = false, selected = false, onClick = undefined, dimmed = false, key = false, keyColor = undefined } = {}) {
   const color = RED7_COLORS[card.colorIndex];
   const cls = ['r7-card'];
   if (mini) cls.push('r7-card-mini');
   if (selected) cls.push('r7-card-selected');
   if (dimmed) cls.push('r7-card-dimmed');
   if (key) cls.push('r7-card-key');
-  const attrs = { class: cls.join(' '), style: `--c:${color.color}` };
+  const attrs = { class: cls.join(' '), style: `--c:${color.color}${key && keyColor ? `;--kc:${keyColor}` : ''}` };
   if (onClick) { attrs.role = 'button'; attrs.tabindex = '0'; attrs.onClick = onClick; }
   return el('div', attrs, [
     el('div', { class: 'r7-num', text: String(card.number) }),
@@ -672,6 +687,12 @@ function renderRed7RuleArea(G) {
   container.innerHTML = '';
   const rule = RED7_COLORS[G.ruleColorIndex];
   const currentCard = G.canvas.length > 0 ? G.canvas[G.canvas.length - 1] : null;
+
+  // 区域标题：画布区
+  container.appendChild(el('div', { class: 'section-label section-label-canvas' }, [
+    el('span', { text: '画布区' }),
+    el('span', { class: 'section-label-sub', text: '弃牌到此改变规则' }),
+  ]));
 
   // 当前生效规则牌
   const curKids = [
@@ -699,9 +720,8 @@ function renderRed7RuleArea(G) {
     })),
   ]));
 
-  // 画布区弃牌堆
+  // 画布区弃牌堆（无独立标题，间距收紧）
   container.appendChild(el('div', { class: 'r7-canvas' }, [
-    el('div', { class: 'label', text: '画布区（弃牌改规则）' }),
     G.canvas.length === 0
       ? el('span', { class: 'empty-hint', text: '尚未弃牌，当前为初始规则' })
       : el('div', { class: 'r7-canvas-cards' }, G.canvas.map((c) => red7CardNode(c, { mini: true }))),
@@ -712,6 +732,11 @@ function renderRed7RuleArea(G) {
 function renderRed7Players(G, ctx, playerID) {
   const container = $('#players');
   container.innerHTML = '';
+  // 区域标题：调色盘
+  container.appendChild(el('div', { class: 'section-label section-label-palette' }, [
+    el('span', { text: '调色盘' }),
+    el('span', { class: 'section-label-sub', text: '打出到此参与优胜判定' }),
+  ]));
   const winners = computeWinningIds(G);
   const nicknames = nicknameMap();
   for (const id of G.playOrder) {
@@ -724,13 +749,12 @@ function renderRed7Players(G, ctx, playerID) {
     if (isMe) cls.push('me');
     if (isCurrent) cls.push('active');
     if (eliminated) cls.push('r7-eliminated');
-    if (winning) cls.push('r7-winning');
     const handCount = Array.isArray(p.hand) ? p.hand.length : p.hand;
     const rightKids = [el('span', { class: 'r7-hand-count', text: `手牌 ${handCount}` })];
     if (eliminated) rightKids.push(el('span', { class: 'r7-badge r7-badge-out', text: '已出局' }));
     else if (winning) rightKids.push(el('span', { class: 'r7-badge r7-badge-win', text: '优胜' }));
     const headKids = [
-      el('span', { class: 'territory-name', text: `${playerNameText(id, nicknames)}${isMe ? '（你）' : ''}` }),
+      el('span', { class: 'territory-name' }, [playerNameNode(id, nicknames, { me: isMe })]),
       el('span', { class: 'r7-head-right' }, rightKids),
     ];
     container.appendChild(el('div', { class: cls.join(' ') }, [
@@ -740,7 +764,8 @@ function renderRed7Players(G, ctx, playerID) {
           ? [el('span', { class: 'empty-hint', text: '调色盘为空' })]
           : (() => {
               const keyIds = new Set(ruleKeyCards(G.ruleColorIndex, p.palette).map((k) => k.id));
-              return p.palette.map((c) => red7CardNode(c, { mini: true, dimmed: eliminated, key: !eliminated && keyIds.has(c.id) }));
+              const keyColor = RED7_COLORS[G.ruleColorIndex].color;
+              return p.palette.map((c) => red7CardNode(c, { mini: true, dimmed: eliminated, key: !eliminated && keyIds.has(c.id), keyColor }));
             })(),
       ),
     ]));
@@ -753,11 +778,11 @@ function renderRed7Hand(G, playerID, isMyTurn) {
   container.innerHTML = '';
   const me = G.players[playerID];
   if (!me || !Array.isArray(me.hand)) {
-    container.appendChild(el('div', { class: 'empty-hint', text: '等待其他玩家行动...' }));
+    container.appendChild(el('div', { class: 'r7-hint', text: '等待其他玩家行动...' }));
     return;
   }
   if (me.hand.length === 0) {
-    container.appendChild(el('div', { class: 'empty-hint', text: isMyTurn ? '手牌已空，回合开始将自动出局' : '手牌为空' }));
+    container.appendChild(el('div', { class: 'r7-hint', text: isMyTurn ? '手牌已空，回合开始将自动出局' : '手牌为空' }));
     return;
   }
   me.hand.forEach((card, idx) => {
@@ -776,17 +801,18 @@ function renderRed7PendingPanel(state) {
   const { G, playerID } = state;
   const panel = $('#play-panel');
   panel.innerHTML = '';
+  const nicknames = nicknameMap();
   const pending = G.pending;
 
   if (pending.type === 'action1') {
-    panel.appendChild(el('div', { class: 'empty-hint', text: '打出 1：选择其他玩家调色盘中的 1 张牌（置于抽牌堆顶部）。' }));
+    panel.appendChild(el('div', { class: 'r7-hint r7-hint-forced', text: '打出 1：选择其他玩家调色盘中的 1 张牌（置于抽牌堆顶部）。' }));
     const others = G.playOrder.filter(
       (id) => id !== playerID && !G.players[id].eliminated && G.players[id].palette.length > 0,
     );
     for (const id of others) {
       const palette = G.players[id].palette;
       panel.appendChild(el('div', { class: 'dest-row' }, [
-        el('span', { class: 'dest-title', text: `玩家 ${pLabel(id)}` }),
+        el('span', { class: 'dest-title' }, [playerNameNode(id, nicknames)]),
         el('div', { class: 'dest-buttons' }, palette.map((card, idx) => red7CardNode(card, {
           mini: true,
           onClick: () => client.moves.resolveAction1(id, idx),
@@ -794,7 +820,7 @@ function renderRed7PendingPanel(state) {
       ]));
     }
   } else if (pending.type === 'action7') {
-    panel.appendChild(el('div', { class: 'empty-hint', text: '打出 7：弃置 1 张调色盘中的牌（不含本张 7）到画布。' }));
+    panel.appendChild(el('div', { class: 'r7-hint r7-hint-forced', text: '打出 7：弃置 1 张调色盘中的牌（不含本张 7）到画布。' }));
     const me = G.players[playerID];
     const candidates = me.palette
       .map((card, idx) => ({ card, idx }))
@@ -806,17 +832,106 @@ function renderRed7PendingPanel(state) {
   }
 }
 
+/**
+ * 新手提示：选中手牌后，预览「打出到调色盘 / 弃置到画布」两种行动的规则效果。
+ * 展示数字特效（1/3/5/7）与额外行动、规则切换详情、特殊摸牌判定。
+ */
+function renderRed7ActionPreview(panel, state, card) {
+  const { G, playerID } = state;
+  const me = G.players[playerID];
+  const canPlay = !G.turnPlayed || G.mustPlay;
+  const canDiscard = !G.turnDiscarded;
+  const paletteCount = me.palette.length;
+  // playerView 后 deck 为张数（数字）
+  const deckCount = typeof G.deck === 'number' ? G.deck : 0;
+
+  // —— 打出到调色盘：数字特效 / 额外行动 ——
+  const playLines = [];
+  if (canPlay) {
+    if (card.number === 1) {
+      const hasTarget = G.playOrder.some(
+        (id) => id !== playerID && !G.players[id].eliminated && G.players[id].palette.length > 0,
+      );
+      playLines.push(hasTarget
+        ? el('div', { class: 'r7-preview-line r7-preview-fx', text: '触发数字1特效：须选其他玩家调色盘中的 1 张牌，置于摸牌堆顶。' })
+        : el('div', { class: 'r7-preview-line', text: '数字1特效：其他玩家调色盘均无牌，无实际效果。' }));
+    } else if (card.number === 3) {
+      playLines.push(deckCount > 0
+        ? el('div', { class: 'r7-preview-line r7-preview-fx', text: '触发数字3特效：额外摸 1 张牌。' })
+        : el('div', { class: 'r7-preview-line', text: '数字3特效：摸牌堆已空，无法摸牌。' }));
+    } else if (card.number === 5) {
+      playLines.push(me.hand.length - 1 > 0
+        ? el('div', { class: 'r7-preview-line r7-preview-fx', text: '触发数字5特效：额外行动，必须继续打出 1 张牌。' })
+        : el('div', { class: 'r7-preview-line', text: '数字5特效：打出后已无手牌，无需续打。' }));
+    } else if (card.number === 7) {
+      playLines.push(paletteCount > 0
+        ? el('div', { class: 'r7-preview-line r7-preview-fx', text: '触发数字7特效：须弃置调色盘中 1 张牌（不含本张）到画布改规则。' })
+        : el('div', { class: 'r7-preview-line', text: '数字7特效：调色盘无其他牌，无实际效果。' }));
+    } else {
+      playLines.push(el('div', { class: 'r7-preview-line', text: `数字${card.number}无特效，打出后不触发额外行动。` }));
+    }
+  } else {
+    playLines.push(el('div', { class: 'r7-preview-line', text: '本回合已打出过，每回合限 1 次。' }));
+  }
+
+  // —— 弃置到画布：规则切换详情 / 特殊摸牌 ——
+  const discardLines = [];
+  if (canDiscard) {
+    const rule = RED7_COLORS[card.colorIndex];
+    discardLines.push(el('div', { class: 'r7-preview-line', text: `规则切换为「${rule.name}：${rule.rule}」。` }));
+    if (card.number > paletteCount) {
+      discardLines.push(deckCount > 0
+        ? el('div', { class: 'r7-preview-line r7-preview-fx', text: `触发特殊摸牌：点数 ${card.number} > 调色盘 ${paletteCount} 张 → 摸 1 张牌。` })
+        : el('div', { class: 'r7-preview-line', text: `点数 ${card.number} > 调色盘 ${paletteCount} 张，但摸牌堆已空，无法摸牌。` }));
+    } else {
+      discardLines.push(el('div', { class: 'r7-preview-line', text: `点数 ${card.number} ≤ 调色盘 ${paletteCount} 张，不满足特殊摸牌条件。` }));
+    }
+  } else {
+    discardLines.push(el('div', { class: 'r7-preview-line', text: '本回合已弃牌到画布，每回合限 1 次。' }));
+  }
+
+  const previewSection = (title, ok, lines) => el('div', {
+    class: `r7-tip-section ${ok ? '' : 'r7-tip-section-off'}`,
+  }, [
+    el('div', { class: 'r7-preview-title' }, [
+      el('span', { text: title }),
+      el('span', { class: `r7-preview-state ${ok ? 'r7-preview-state-ok' : 'r7-preview-state-off'}`, text: ok ? '可用' : '不可用' }),
+    ]),
+    ...lines,
+  ]);
+
+  // 合并为单个「游戏小tip」卡片：头部 + 两个行动小节
+  panel.appendChild(el('div', {
+    class: 'r7-tip',
+    style: `--c:${RED7_COLORS[card.colorIndex].color}`,
+  }, [
+    el('div', { class: 'r7-tip-head', text: `游戏小tip · ${red7CardLabel(card)}` }),
+    el('div', { class: 'r7-tip-body' }, [
+      previewSection('打出到调色盘', canPlay, playLines),
+      previewSection('弃置到画布', canDiscard, discardLines),
+    ]),
+  ]));
+}
+
 /** 行动面板：打出到调色盘 / 弃置到画布 / 结束回合；超出使用次数或未选牌则置灰；含进阶规则待结算与「必须继续打」。 */
 function renderRed7PlayPanel(state) {
   const { G, ctx, playerID } = state;
   const panel = $('#play-panel');
   panel.innerHTML = '';
 
+  // 强制行动（打出 5 须续打 / 打出 1、7 待结算）：面板脉冲强调，并在出现时自动滚动定位
+  const forced = !ctx.gameover && ctx.currentPlayer === playerID && !!(G.pending || G.mustPlay);
+  panel.classList.toggle('r7-forced', forced);
+  if (forced && !prevForcedAction) {
+    requestAnimationFrame(() => panel.scrollIntoView({ behavior: 'smooth', block: 'center' }));
+  }
+  prevForcedAction = forced;
+
   if (ctx.gameover) return;
 
   const isMyTurn = ctx.currentPlayer === playerID;
   if (!isMyTurn) {
-    panel.appendChild(el('div', { class: 'empty-hint', text: '等待其他玩家行动...' }));
+    panel.appendChild(el('div', { class: 'r7-hint', text: '等待其他玩家行动...' }));
     return;
   }
 
@@ -837,6 +952,11 @@ function renderRed7PlayPanel(state) {
   const canDiscard = hasSel && !discarded;
   const canEnd = !mustPlay;
 
+  // 建议结束回合：已处于优胜，或本回合打出/弃置次数均已用完（仅剩结束回合可操作）
+  const winning = computeWinningIds(G).includes(playerID);
+  const noMoreOps = played && discarded && !mustPlay;
+  const suggestEnd = !mustPlay && (winning || noMoreOps);
+
   // 三个按钮始终显示，超出使用次数或未选牌则置灰
   const buttons = [
     el('button', {
@@ -852,7 +972,7 @@ function renderRed7PlayPanel(state) {
       onClick: () => { client.moves.discardToCanvas(selectedIndex); resetRed7Selection(); },
     }),
     el('button', {
-      class: 'btn btn-sm btn-primary',
+      class: `btn btn-sm btn-primary ${suggestEnd ? 'btn-end-suggest' : ''}`,
       text: '结束回合',
       disabled: canEnd ? false : 'disabled',
       onClick: () => { client.moves.endTurn(); resetRed7Selection(); },
@@ -860,16 +980,28 @@ function renderRed7PlayPanel(state) {
   ];
 
   let hint;
-  if (hand.length === 0) {
+  if (noMoreOps) {
+    hint = null; // 无可用操作次数时不再提示选牌（下方有结束回合引导）
+  } else if (hand.length === 0) {
     hint = '手牌已空，可结束回合。';
   } else if (!hasSel) {
     hint = '请先点击选择一张手牌。';
   } else {
     hint = `已选：${red7CardLabel(hand[selectedIndex])}。选择行动：`;
   }
-  if (mustPlay) hint = `打出 5：必须继续打出 1 张牌。 ${hint}`;
+  if (mustPlay) hint = `打出 5：必须继续打出 1 张牌。 ${hint || ''}`;
 
-  panel.appendChild(el('div', { class: 'empty-hint', text: hint }));
+  if (hint) panel.appendChild(el('div', { class: `r7-hint ${mustPlay ? 'r7-hint-forced' : ''}`, text: hint }));
+
+  // 建议结束回合的引导提示
+  if (suggestEnd) {
+    const tip = noMoreOps
+      ? '本回合已无其他可用操作，点击「结束回合」进入下一位玩家。'
+      : '你已处于优胜状态，点击「结束回合」保住领先。';
+    panel.appendChild(el('div', { class: 'r7-hint r7-hint-suggest', text: tip }));
+  }
+  // 新手提示：选中手牌后展示两种行动的规则效果预览
+  if (hasSel) renderRed7ActionPreview(panel, state, hand[selectedIndex]);
   panel.appendChild(el('div', { class: 'dest-row' }, buttons));
 }
 
@@ -885,10 +1017,12 @@ function renderRed7Gameover(ctx) {
   box.style.display = 'block';
   box.innerHTML = '';
   box.appendChild(el('h2', { text: '本轮结束' }));
-  box.appendChild(el('p', {
-    class: 'go-summary',
-    text: `获胜者：${ctx.gameover.winners.map((w) => playerNameText(w, nicknames)).join('、')}`,
-  }));
+  box.appendChild(el('p', { class: 'go-summary' }, [
+    el('span', { text: '获胜者：' }),
+    ...ctx.gameover.winners.flatMap((w, i) => (i === 0
+      ? [playerNameNode(w, nicknames)]
+      : [el('span', { text: '、' }), playerNameNode(w, nicknames)])),
+  ]));
 }
 
 /** Red7 统一渲染。 */
@@ -982,7 +1116,7 @@ function renderLobby(state) {
 
     seatsEl.appendChild(el('div', { class: cls.join(' ') }, [
       el('div', { class: 'seat-head' }, [
-        el('span', { class: 'seat-no', text: `座位 ${pLabel(s.id)}` }),
+        el('span', { class: 'seat-no player-tag' }, [el('span', { text: '座位' }), playerNoBadge(s.id)]),
         ...badges,
       ]),
       el('div', { class: 'seat-name', text: filled ? s.name : '虚位以待' }),
@@ -1130,14 +1264,14 @@ function renderLibrary() {
   }
 }
 
-/** 按需加载游戏专属 CSS（base.css 已静态引入，游戏 CSS 首次需要时动态注入）。 */
+/** 按需加载游戏专属 CSS（base.css 已静态引入，游戏 CSS 首次需要时动态注入；带版本号防浏览器缓存）。 */
 function ensureGameCSS(game) {
   const css = game && game.css;
   if (!css || loadedCSS.has(css)) return;
   loadedCSS.add(css);
   const link = document.createElement('link');
   link.rel = 'stylesheet';
-  link.href = css;
+  link.href = `${css}?v=${CSS_VERSION}`;
   document.head.appendChild(link);
 }
 

@@ -16,9 +16,9 @@ import { Red7Game } from './red7.js';
 
 export const GAMES = [
   {
-    title: 'Quanc 卡牌游戏',
+    title: 'Quanc',
     tagline: '2-5 人 · 回合制 · 卡牌博弈',
-    description: '六大家族争夺餐桌与领地：间谍隐藏身份、刺客暗算、贵族权重、任务暗中角力。',
+    description: '六大家族争夺餐桌与领地：间谍潜伏、刺客暗算、贵族权重、任务暗中角力。',
     icon: '🦁',
     color: '#d6c01bff',
     game: QuancGame,
@@ -26,9 +26,9 @@ export const GAMES = [
     template: 'template-quanc',
   },
   {
-    title: '红7 (Red7)',
+    title: 'Red7',
     tagline: '2-4 人 · 规则瞬息万变 · 卡牌博弈',
-    description: '拥有最好的调色盘。弃牌改变规则，回合结束非优胜者淘汰，坚持到最后。',
+    description: '拥有最好的调色盘。改变颜色规则，回合结束非优胜者淘汰，坚持到最后。',
     icon: '🔴',
     color: '#e53935',
     game: Red7Game,
