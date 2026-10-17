@@ -546,7 +546,7 @@ function renderTaskPanel(G, playerID) {
     container.appendChild(el('div', { class: `task-item ${done ? 'task-done' : ''}` }, [
       el('div', { class: 'task-head' }, [
         el('span', { class: 'task-label', text: label }),
-        el('span', { class: 'task-status', text: done ? '已完成' : '未完成' }),
+        el('span', { class: 'task-status', text: done ? '得分+3' : '未完成' }),
       ]),
       el('div', { class: 'task-name', text: task.name }),
       el('div', { class: 'task-desc', text: task.desc }),

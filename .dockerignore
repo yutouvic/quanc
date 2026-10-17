@@ -7,3 +7,5 @@ node_modules
 规则书.md
 Dockerfile
 .dockerignore
+public/card-demo.html
+public/card-preview.html

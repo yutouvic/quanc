@@ -7,10 +7,10 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 
-# 复制源码与静态资源，执行前端打包（生成 public/client.js）
+# 复制源码与静态资源，执行前端打包（压缩后生成 public/client.js）
 COPY src ./src
 COPY public ./public
-RUN npm run build
+RUN npm run build:prod && rm -f src/client.js
 
 # ---------- 运行阶段：仅保留生产依赖与构建产物 ----------
 FROM node:22-alpine
@@ -20,7 +20,7 @@ ENV NODE_ENV=production \
 
 WORKDIR /app
 
-# 仅安装生产依赖（boardgame.io、koa-static 等）
+# 仅安装生产依赖（boardgame.io、koa-static 等）并清理缓存
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 
@@ -28,8 +28,9 @@ RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=builder /app/src ./src
 COPY --from=builder /app/public ./public
 
-# 以非 root 用户运行
-RUN addgroup -S app && adduser -S app -G app
+# 清理系统缓存，以非 root 用户运行
+RUN rm -rf /var/cache/apk/* \
+    && addgroup -S app && adduser -S app -G app
 USER app
 
 EXPOSE 8000

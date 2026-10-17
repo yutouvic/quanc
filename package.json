@@ -6,6 +6,7 @@
   "main": "src/server.js",
   "scripts": {
     "build": "esbuild src/client.js --bundle --format=esm --outfile=public/client.js",
+    "build:prod": "esbuild src/client.js --bundle --format=esm --minify --outfile=public/client.js",
     "build:watch": "esbuild src/client.js --bundle --format=esm --outfile=public/client.js --watch",
     "start": "npm run build && node src/server.js",
     "dev": "node --watch src/server.js"
