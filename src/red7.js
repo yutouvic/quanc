@@ -306,16 +306,28 @@ export function ruleKeyCards(ruleIndex, palette) {
 }
 
 /**
+ * 红色兜底：若所有存活玩家在当前规则下均无 key 牌，则实际生效规则视为红色。
+ * @returns {number} 实际生效的规则颜色索引
+ */
+export function effectiveRuleIndex(G) {
+  const active = G.playOrder.filter((id) => !G.players[id].eliminated);
+  if (active.length === 0) return G.ruleColorIndex;
+  const allNoKeyCards = active.every((id) => ruleKeyCards(G.ruleColorIndex, G.players[id].palette).length === 0);
+  return allNoKeyCards ? 0 : G.ruleColorIndex;
+}
+
+/**
  * 计算当前规则的优胜玩家集合（并列最优者均为优胜）。
  * 可在客户端 playerView 后的 G 上运行（调色盘与规则公开）。
  */
 export function computeWinningIds(G) {
   const active = G.playOrder.filter((id) => !G.players[id].eliminated);
   if (active.length === 0) return [];
+  const ruleIndex = effectiveRuleIndex(G);
   let bestKey = null;
   let winners = [];
   for (const id of active) {
-    const key = ruleKey(G.ruleColorIndex, G.players[id].palette);
+    const key = ruleKey(ruleIndex, G.players[id].palette);
     if (bestKey === null || compareKeys(key, bestKey) > 0) {
       bestKey = key;
       winners = [id];

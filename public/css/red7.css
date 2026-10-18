@@ -96,7 +96,24 @@
 }
 .r7-card-mini .r7-num { font-size: 26px; }
 .r7-card-mini .r7-color { font-size: 12px; font-weight: 600; }
-.r7-card-mini:hover { transform: translateY(-3px); }
+.r7-card-mini:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 16px rgba(0,0,0,0.5), 0 0 0 2px rgba(255,255,255,0.35);
+}
+/* 可交互的 mini 卡（如 pending 结算时的调色盘选牌）：hover 效果更明显 */
+.r7-card-mini[role="button"]:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 10px 20px rgba(0,0,0,0.55), 0 0 0 2px rgba(255,217,102,0.6);
+}
+/* 静态卡牌（无 onClick，如调色盘展示牌）：禁用 hover 交互反馈 */
+.r7-card-static { cursor: default; }
+.r7-card-static:hover {
+  transform: none;
+  box-shadow:
+    0 8px 18px rgba(0,0,0,0.5),
+    0 2px 5px rgba(0,0,0,0.4),
+    0 0 0 1px color-mix(in srgb, var(--c) 45%, transparent);
+}
 
 /* ========== Red7 规则区 / 画布 ========== */
 .r7-rule {
@@ -285,6 +302,7 @@
 @media (hover: none) {
   .r7-card:hover { transform: none; }
   .r7-card-mini:hover { transform: none; }
+  .r7-card-static:hover { transform: none; }
 }
 
 /* 系统偏好「减少动态效果」时停用 Red7 选中态动画、关键牌流光与强制面板脉冲 */

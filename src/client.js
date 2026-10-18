@@ -6,7 +6,7 @@
 import { Client } from 'boardgame.io/client';
 import { SocketIO } from 'boardgame.io/multiplayer';
 import { QuancGame, computeFamilyFates, pLabel, getTask } from './quanc.js';
-import { Red7Game, RED7_COLORS, computeWinningIds, ruleKeyCards } from './red7.js';
+import { Red7Game, RED7_COLORS, computeWinningIds, ruleKeyCards, effectiveRuleIndex } from './red7.js';
 import { GAMES, getGame } from './games.js';
 import { FAMILIES, getFamily } from './quanc-cards.js';
 import { FAMILY_ICONS, TYPE_ICONS, BACK_EMBLEM } from './quanc-icons.js';
@@ -28,7 +28,7 @@ let seenCardIds = new Set(); // 已出现过的卡牌 id，用于给新牌播放
 let prevEnded = false;       // 上一帧是否已结束（用于一次性触发翻牌/得分滚动）
 let justEnded = false;       // 本帧是否为游戏结束瞬间
 const loadedCSS = new Set(); // 已动态加载的游戏 CSS 路径（去重）
-const CSS_VERSION = '16';     // CSS 版本号：样式更新时递增，防止浏览器缓存旧样式
+const CSS_VERSION = '17';     // CSS 版本号：样式更新时递增，防止浏览器缓存旧样式
 
 /** 当前游戏的 boardgame.io 名称（大厅路由键），未选择时为空串。 */
 function gameName() {
@@ -667,6 +667,7 @@ function red7CardNode(card, { mini = false, selected = false, onClick = undefine
   if (dimmed) cls.push('r7-card-dimmed');
   if (key) cls.push('r7-card-key');
   if (soft) cls.push('r7-card-soft');
+  if (!onClick) cls.push('r7-card-static');
   const attrs = { class: cls.join(' '), style: `--c:${color.color}${key && keyColor ? `;--kc:${keyColor}` : ''}` };
   if (onClick) { attrs.role = 'button'; attrs.tabindex = '0'; attrs.onClick = onClick; }
   // 大卡右上角：数字 1/3/5/7 为特效牌，显示小闪电标记
@@ -686,11 +687,10 @@ function red7CardNode(card, { mini = false, selected = false, onClick = undefine
   return el('div', attrs, kids);
 }
 
-/** 头部信息：当前规则 + 剩余人数。 */
+/** 头部信息：仅剩余人数（当前规则在画布区展示，避免重复）。 */
 function renderRed7Header(G) {
-  const rule = RED7_COLORS[G.ruleColorIndex];
   const activeCount = G.playOrder.filter((id) => !G.players[id].eliminated).length;
-  $('#deck-info').textContent = `当前规则：${rule.name}·${rule.rule} · 摸牌堆 ${G.deck} 张 · 剩余 ${activeCount} 人`;
+  $('#deck-info').textContent = `剩余 ${activeCount} 人`;
 }
 
 /** 画布区：当前生效规则牌 + 7 种颜色规则一览（当前高亮）+ 弃牌堆历史。 */
@@ -702,7 +702,7 @@ function renderRed7RuleArea(G) {
 
   // 区域标题：画布区
   container.appendChild(el('div', { class: 'section-label section-label-canvas' }, [
-    el('span', { text: '画布区' }),
+    el('span', { text: '画布区/规则区' }),
     el('span', { class: 'section-label-sub', text: '弃牌到此改变规则' }),
   ]));
 
@@ -770,7 +770,7 @@ function renderRed7Players(G, ctx, playerID) {
       turnText = isMe ? '轮到你了' : '该玩家行动中';
     }
     const handCount = Array.isArray(p.hand) ? p.hand.length : p.hand;
-    const rightKids = [el('span', { class: 'r7-hand-count', text: `手牌 ${handCount}` })];
+    const rightKids = [el('span', { class: 'r7-hand-count', text: `手牌 ${handCount} 张` })];
     if (eliminated) rightKids.push(el('span', { class: 'r7-badge r7-badge-out', text: '已出局' }));
     else if (winning) rightKids.push(el('span', { class: 'r7-badge r7-badge-win', text: '优胜' }));
     const headKids = [
@@ -783,8 +783,9 @@ function renderRed7Players(G, ctx, playerID) {
         p.palette.length === 0
           ? [el('span', { class: 'empty-hint', text: '调色盘为空' })]
           : (() => {
-              const keyIds = new Set(ruleKeyCards(G.ruleColorIndex, p.palette).map((k) => k.id));
-              const keyColor = RED7_COLORS[G.ruleColorIndex].color;
+              const effRule = effectiveRuleIndex(G);
+              const keyIds = new Set(ruleKeyCards(effRule, p.palette).map((k) => k.id));
+              const keyColor = RED7_COLORS[effRule].color;
               return p.palette.map((c) => {
                 const isKey = !eliminated && keyIds.has(c.id);
                 return red7CardNode(c, { mini: true, dimmed: eliminated, key: isKey, keyColor, soft: !eliminated && !isKey });
@@ -799,6 +800,13 @@ function renderRed7Players(G, ctx, playerID) {
 function renderRed7Hand(G, playerID, isMyTurn) {
   const container = $('#hand');
   container.innerHTML = '';
+  // 手牌区标题右侧小字：摸牌堆剩余张数
+  const handLabel = document.querySelector('.section-label-hand');
+  if (handLabel) {
+    handLabel.innerHTML = '';
+    handLabel.appendChild(el('span', { text: '手牌区' }));
+    handLabel.appendChild(el('span', { class: 'section-label-sub', style: 'margin-left: auto;', text: `摸牌堆 ${G.deck} 张` }));
+  }
   const me = G.players[playerID];
   if (!me || !Array.isArray(me.hand)) {
     container.appendChild(el('div', { class: 'r7-hint', text: '等待其他玩家行动...' }));

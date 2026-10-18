@@ -96,20 +96,6 @@
 }
 
 /* 类型差异化（外框/内衬/纹章仍为家族色） */
-.card-noble .card-frame::after {
-  content: ''; position: absolute; top: -30%; left: -70%;
-  width: 45%; height: 160%;
-  background: linear-gradient(100deg, transparent, rgba(255,255,255,0.5) 50%, transparent);
-  transform: skewX(-22deg);
-  will-change: transform;
-  animation: card-sheen 3.2s ease-in-out infinite;
-  pointer-events: none;
-}
-/* 流光用 transform 位移（合成器处理），不修改 left，避免逐帧布局/重绘 */
-@keyframes card-sheen {
-  0%, 55% { transform: skewX(-22deg) translateX(0); }
-  100% { transform: skewX(-22deg) translateX(455.56%); }
-}
 .card-guard .card-tex {
   background-image: repeating-linear-gradient(45deg, rgba(0,0,0,0.7) 0 2px, transparent 2px 6px);
   opacity: 0.6;
@@ -312,6 +298,5 @@
 
 /* 系统偏好「减少动态效果」时停用流光与翻牌，仅保留静态描边 */
 @media (prefers-reduced-motion: reduce) {
-  .card-noble .card-frame::after { animation: none; }
   .card.card-enter, .card.card-flip { animation: none; }
 }
