@@ -293,6 +293,32 @@ export function computeTaskResults(G) {
 }
 
 /**
+ * 构建全新的大厅初始状态（setup 与「返回房间」共用，保证房间可重复利用）。
+ * 牌堆移除推迟到 startGame，按实际参与人数计算。
+ */
+function freshQuancG(ctx, random, logLine) {
+  return {
+    deck: buildShuffledDeck(random),
+    removedCount: 0,
+    table: { favored: [], disfavored: [] },
+    players: initPlayers(ctx.numPlayers),
+    playOrder: [],
+    playerCount: 0,
+    discard: [],
+    pendingAssassin: null,
+    turnDrawCount: 0,
+    turnPlayCount: 0,
+    turnUsed: { own: false, opponent: false, table: false },
+    lobby: { ready: {}, started: false },
+    ended: false,
+    results: null, // 结算数据（获胜者/得分/任务/家族宠辱），结束时写入
+    turnBase: 1,   // play 阶段起始回合基准（startGame 时写入），用于轮次计算
+    round: 1,
+    log: [logLine],
+  };
+}
+
+/**
  * boardgame.io Game 定义。
  */
 export const QuancGame = {
@@ -302,29 +328,7 @@ export const QuancGame = {
 
   setup: ({ ctx, random }) => {
     // 房间固定创建 5 个座位，实际人数在房主开局时才确定；
-    // 牌堆移除也推迟到 startGame，按实际参与人数计算。
-    const deck = buildShuffledDeck(random);
-
-    const G = {
-      deck,
-      removedCount: 0,
-      table: { favored: [], disfavored: [] },
-      players: initPlayers(ctx.numPlayers),
-      playOrder: [],
-      playerCount: 0,
-      discard: [],
-      pendingAssassin: null,
-      turnDrawCount: 0,
-      turnPlayCount: 0,
-      turnUsed: { own: false, opponent: false, table: false },
-      lobby: { ready: {}, started: false },
-      ended: false,
-      hostEnded: false,
-      round: 1,
-      log: [],
-    };
-    G.log.push('房间已创建：最多 5 人，至少 2 人即可开局，等待玩家加入。');
-    return G;
+    return freshQuancG(ctx, random, '房间已创建：最多 5 人，至少 2 人即可开局，等待玩家加入。');
   },
 
   /**
@@ -345,11 +349,22 @@ export const QuancGame = {
       },
 
       moves: {
-        /** 玩家进入房间后自动标记已准备。 */
-        lobbyReady: ({ G, playerID }) => {
-          if (!G.lobby) return INVALID_MOVE;
-          G.lobby.ready[playerID] = true;
-          return undefined;
+        /**
+         * 玩家进入房间后自动标记已准备。
+         * 设为长格式 + ignoreStaleStateID（不设 client:false，保留客户端乐观更新）：
+         * - 两名玩家几乎同时重连 / 返回房间时，各自的 lobbyReady 可能携带同一个
+         *   旧 stateID，后到者会被 boardgame.io 以「invalid stateID」拒绝；
+         *   该 move 幂等（只写自己的 ready 标记），可安全忽略陈旧 stateID。
+         * - 必须保留乐观更新：客户端依赖本地 ready 标记立刻变 true 来终止
+         *   自动 lobbyReady 重试，否则会在 subscribe 回调里无限重发。
+         */
+        lobbyReady: {
+          ignoreStaleStateID: true,
+          move: ({ G, playerID }) => {
+            if (!G.lobby) return INVALID_MOVE;
+            G.lobby.ready[playerID] = true;
+            return undefined;
+          },
         },
 
         /**
@@ -357,35 +372,45 @@ export const QuancGame = {
          * 此处只裁掉空座位、固定正式游戏回合顺序；
          * 牌堆移除放在 play 阶段 onBegin（客户端乐观更新拿到的是
          * playerView 后的状态，deck 仅为数字张数，不能在 move 里直接操作牌组）。
+         *
+         * 与 Red7 一致设为 client:false（仅服务端结算）：
+         * 开局依赖 random 抽任务，且会触发 endPhase → play.onBegin（操作牌堆），
+         * 这些都不应在客户端乐观执行（会造成任务不一致 / 操作数字牌堆）。
          */
-        startGame: ({ G, ctx, playerID, events, random }) => {
-          if (!G.lobby || G.lobby.started) return INVALID_MOVE;
-          if (playerID !== '0') return INVALID_MOVE; // 仅房主（创建者，座位 0）
-          const participants = Object.keys(G.lobby.ready).sort((a, b) => Number(a) - Number(b));
-          const count = participants.length;
-          if (count < 2 || count > ctx.numPlayers) return INVALID_MOVE; // 至少 2 人，不超过座位数
+        startGame: {
+          client: false,
+          move: ({ G, ctx, playerID, events, random }) => {
+            if (!G.lobby || G.lobby.started) return INVALID_MOVE;
+            if (playerID !== '0') return INVALID_MOVE; // 仅房主（创建者，座位 0）
+            const participants = Object.keys(G.lobby.ready).sort((a, b) => Number(a) - Number(b));
+            const count = participants.length;
+            if (count < 2 || count > ctx.numPlayers) return INVALID_MOVE; // 至少 2 人，不超过座位数
 
-          // 裁掉未加入的空座位，并固定正式游戏回合顺序
-          for (const id of Object.keys(G.players)) {
-            if (!G.lobby.ready[id]) delete G.players[id];
-          }
-          G.playOrder = participants;
-          G.playerCount = count;
+            // 裁掉未加入的空座位，并固定正式游戏回合顺序
+            for (const id of Object.keys(G.players)) {
+              if (!G.lobby.ready[id]) delete G.players[id];
+            }
+            G.playOrder = participants;
+            G.playerCount = count;
+            // 记录 play 阶段起始回合基准：房间重开后 ctx.turn 不会归零，
+            // 轮次计算须以本次开局时的回合数为基准
+            G.turnBase = ctx.turn;
 
-          // 抽取任务（不放回，每名玩家各 1 个餐桌任务 + 1 个领地任务）
-          const tableTasks = shuffleDeck(TABLE_TASKS, random).slice(0, count);
-          const territoryTasks = shuffleDeck(TERRITORY_TASKS, random).slice(0, count);
-          participants.forEach((id, i) => {
-            G.players[id].tasks = {
-              table: tableTasks[i].id,
-              territory: territoryTasks[i].id,
-            };
-          });
+            // 抽取任务（不放回，每名玩家各 1 个餐桌任务 + 1 个领地任务）
+            const tableTasks = shuffleDeck(TABLE_TASKS, random).slice(0, count);
+            const territoryTasks = shuffleDeck(TERRITORY_TASKS, random).slice(0, count);
+            participants.forEach((id, i) => {
+              G.players[id].tasks = {
+                table: tableTasks[i].id,
+                territory: territoryTasks[i].id,
+              };
+            });
 
-          G.lobby.started = true;
-          G.log.push(`已有 ${count} 名玩家就位，游戏开始。`);
-          events.endPhase();
-          return undefined;
+            G.lobby.started = true;
+            G.log.push(`已有 ${count} 名玩家就位，游戏开始。`);
+            events.endPhase();
+            return undefined;
+          },
         },
       },
     },
@@ -410,13 +435,17 @@ export const QuancGame = {
         activePlayers: { all: 'play' },
 
         onBegin: ({ G, ctx }) => {
+          // 仅在本局进行中的 play 阶段推进回合：
+          // 本局已结束（等待返回房间）或状态已被 backToLobby 重置（lobby.started=false）时冻结，
+          // 防止重置后回合自动推进到下一玩家并误发手牌，污染干净的房间状态
+          if (ctx.phase !== 'play' || G.ended || !G.lobby?.started) return;
           const playerID = ctx.currentPlayer;
           const player = G.players[playerID];
           player.hand = [];
           const numPlayers = ctx.playOrder.length;
-          // lobby 阶段占用第 1 回合，play 阶段自身的回合数为 ctx.turn - 1；
-          // 轮次 = floor((play回合数 - 1) / 实际人数) + 1
-          G.round = Math.floor((ctx.turn - 2) / numPlayers) + 1;
+          // 回合数以 startGame 时的基准（G.turnBase）计算：
+          // 轮次 = floor((当前回合 - 基准) / 实际人数) + 1
+          G.round = Math.floor((ctx.turn - G.turnBase) / numPlayers) + 1;
           G.pendingAssassin = null;
 
           if (G.deck.length === 0) {
@@ -426,6 +455,22 @@ export const QuancGame = {
               G.ended = true;
               G.turnDrawCount = 0;
               G.turnPlayCount = 0;
+              // 结算数据写入 G.results（不再设置 ctx.gameover，
+              // 保证结束后仍可执行「返回房间」move，房间可复用）
+              const { scores, fates } = computeScores(G);
+              const taskResults = computeTaskResults(G);
+              const ids = Object.keys(G.players);
+              const total = {};
+              for (const id of ids) total[id] = scores[id] + taskResults[id].score;
+              const max = Math.max(...ids.map(id => total[id]));
+              G.results = {
+                winners: ids.filter(id => total[id] === max),
+                scores: total,
+                territoryScores: scores,
+                taskResults,
+                fates,
+                reason: '牌堆抽完且所有玩家无手牌，游戏结束',
+              };
               G.log.push('牌堆已空且所有玩家无手牌，游戏结束。');
               return;
             }
@@ -448,7 +493,11 @@ export const QuancGame = {
         },
 
         // 本回合应打的牌都打出、且没有待结算的刺客效果时，自动结束回合
-        endIf: ({ G }) => G.turnPlayCount >= G.turnDrawCount && !G.pendingAssassin,
+        // （本局已结束 / 状态已被 backToLobby 重置后冻结当前回合，不再轮转：
+        //   重置后 turnDrawCount=turnPlayCount=0，若不加守卫 0>=0 恒真，
+        //   会在 setPhase('lobby') 生效前误推进回合并给下一玩家发牌）
+        endIf: ({ G, ctx }) => ctx.phase === 'play' && G.lobby?.started && !G.ended
+          && G.turnPlayCount >= G.turnDrawCount && !G.pendingAssassin,
       },
     },
   },
@@ -468,6 +517,7 @@ export const QuancGame = {
       move: ({ G, ctx, playerID }, handIndex, destination, target) => {
         // 仅在正式游戏阶段可出牌
         if (ctx.phase !== 'play') return INVALID_MOVE;
+        if (G.ended) return INVALID_MOVE; // 本局已结束，等待返回房间
         if (playerID !== ctx.currentPlayer) return INVALID_MOVE;
         const player = G.players[playerID];
         if (!player) return INVALID_MOVE;
@@ -526,6 +576,7 @@ export const QuancGame = {
      */
     resolveAssassin: ({ G, ctx, playerID }, targetIndex) => {
       if (ctx.phase !== 'play') return INVALID_MOVE;
+      if (G.ended) return INVALID_MOVE; // 本局已结束，等待返回房间
       if (playerID !== ctx.currentPlayer) return INVALID_MOVE;
       const pending = G.pendingAssassin;
       if (!pending) return INVALID_MOVE;
@@ -552,12 +603,21 @@ export const QuancGame = {
     },
 
     /**
-     * 房主结束本局：仅作为广播信号，标记本局被房主主动结束。
-     * 客户端收到该标记后统一退出游戏页；不做结算、不清空 G。
+     * 结束本局并返回房间大厅：
+     * - 本局自然结束（G.ended）后，任意玩家可调用，全员回到大厅；
+     * - 游戏进行中仅房主（座位 0）可调用。
+     * 调用后清空上局全部游戏信息（重置为全新大厅状态），房间回到等待阶段，可开始新一局。
      */
-    endGame: ({ G, playerID }) => {
-      if (playerID !== '0') return INVALID_MOVE; // 仅房主（座位 0）可结束
-      G.hostEnded = true;
+    backToLobby: ({ G, ctx, playerID, events, random }) => {
+      if (!G.lobby || !G.lobby.started) return INVALID_MOVE; // 大厅阶段不可用
+      if (!G.ended && playerID !== '0') return INVALID_MOVE; // 进行中仅房主可结束
+      const endedByHost = !G.ended;
+      const fresh = freshQuancG(ctx, random, endedByHost
+        ? '房主已结束本局，房间已重置，可开始新一局。'
+        : '本局已结束，房间已重置，可开始新一局。');
+      for (const k of Object.keys(G)) delete G[k];
+      Object.assign(G, fresh);
+      events.setPhase('lobby');
       return undefined;
     },
   },
@@ -589,29 +649,6 @@ export const QuancGame = {
         disfavored: G.table.disfavored.map(c => maskCard(c, ended)),
       },
       discard: G.discard.map(c => maskCard(c, ended)),
-    };
-  },
-
-  /**
-   * 结束条件与结算：牌堆抽完且所有玩家无手牌（ended 标记）后结束，并计算得分。
-   * 总分 = 领地得分 + 任务得分（每完成一个任务 +3 分）。
-   */
-  endIf: ({ G }) => {
-    if (!G.ended) return undefined;
-    const { scores, fates } = computeScores(G);
-    const taskResults = computeTaskResults(G);
-    const ids = Object.keys(G.players);
-    const total = {};
-    for (const id of ids) total[id] = scores[id] + taskResults[id].score;
-    const max = Math.max(...ids.map(id => total[id]));
-    const winners = ids.filter(id => total[id] === max);
-    return {
-      winners,
-      scores: total,
-      territoryScores: scores,
-      taskResults,
-      fates,
-      reason: '牌堆抽完且所有玩家无手牌，游戏结束',
     };
   },
 };

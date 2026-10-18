@@ -284,7 +284,12 @@ label input, label select {
   border-radius: 12px; padding: 16px; margin-bottom: 14px;
 }
 .gameover-box h2 { font-size: 20px; margin-bottom: 8px; color: #ffd966; }
-.go-summary { margin-bottom: 10px; }
+.go-summary { margin-bottom: 12px; font-size: 22px; }
+/* 结算面板获胜玩家信息放大：编号徽章与昵称更醒目（全局通用，所有游戏共用） */
+.go-summary .player-no { width: 32px; height: 32px; font-size: 18px; }
+.go-summary .player-name { font-size: 26px; font-weight: 700; }
+/* 结算面板「回到房间」按钮：与结算内容留出间距，醒目可点 */
+.go-back-lobby { margin-top: 14px; width: 100%; min-height: 42px; font-size: 15px; }
 
 /* ========== 响应式 ========== */
 /* 平板 / 大屏手机：缩小卡牌与间距、加大触控目标、头部纵向堆叠 */

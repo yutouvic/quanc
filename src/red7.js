@@ -350,12 +350,48 @@ function describeCard(card) {
 function checkRoundEnd(G) {
   const active = G.playOrder.filter((id) => !G.players[id].eliminated);
   if (active.length === 1) {
-    G.roundWinner = active[0];
-    G.ended = true;
-    G.log.push(`玩家 ${pLabel(active[0])} 是唯一剩下的玩家，赢得本轮。`);
+    endRound(G, active[0]);
     return true;
   }
   return false;
+}
+
+/**
+ * 结束本轮：记录获胜者，并把结算数据写入 G.results
+ * （不设置 ctx.gameover，保证结束后仍可执行「返回房间」move，房间可复用）。
+ */
+function endRound(G, winnerId) {
+  G.roundWinner = winnerId;
+  G.ended = true;
+  G.results = { winners: [winnerId], reason: '仅剩一名玩家' };
+  G.log.push(`玩家 ${pLabel(winnerId)} 是唯一剩下的玩家，赢得本轮。`);
+}
+
+/**
+ * 构建全新的大厅初始状态（setup 与「返回房间」共用，保证房间可重复利用）。
+ */
+function freshRed7G(ctx, logLine) {
+  const G = {
+    deck: [],
+    players: {},
+    playOrder: [],
+    firstPlayerIndex: 0,
+    ruleColorIndex: 0, // 初始规则：红
+    canvas: [],         // 画布区弃牌堆（牌的颜色即当时规则）
+    turnPlayed: false,    // 本回合是否已打出到调色盘
+    turnDiscarded: false, // 本回合是否已弃牌到画布
+    mustPlay: false,      // 打出 5 后必须继续打出 1 张牌
+    pending: null,        // 待结算效果：null | { type: 'action1' } | { type: 'action7', cardId }
+    lobby: { ready: {}, started: false },
+    ended: false,
+    results: null, // 结算数据（获胜者），结束时写入
+    roundWinner: null,
+    log: [logLine],
+  };
+  for (let i = 0; i < ctx.numPlayers; i++) {
+    G.players[String(i)] = { hand: [], palette: [], eliminated: false };
+  }
+  return G;
 }
 
 /** 行动①/②/③ 后统一结算：未处于优胜则淘汰，随后检查是否只剩一人。 */
@@ -377,28 +413,7 @@ export const Red7Game = {
   maxPlayers: 4,
 
   setup: ({ ctx }) => {
-    const G = {
-      deck: [],
-      players: {},
-      playOrder: [],
-      firstPlayerIndex: 0,
-      ruleColorIndex: 0, // 初始规则：红
-      canvas: [],         // 画布区弃牌堆（牌的颜色即当时规则）
-      turnPlayed: false,    // 本回合是否已打出到调色盘
-      turnDiscarded: false, // 本回合是否已弃牌到画布
-      mustPlay: false,      // 打出 5 后必须继续打出 1 张牌
-      pending: null,        // 待结算效果：null | { type: 'action1' } | { type: 'action7', cardId }
-      lobby: { ready: {}, started: false },
-      ended: false,
-      hostEnded: false,
-      roundWinner: null,
-      log: [],
-    };
-    for (let i = 0; i < ctx.numPlayers; i++) {
-      G.players[String(i)] = { hand: [], palette: [], eliminated: false };
-    }
-    G.log.push('房间已创建：最多 4 人，至少 2 人即可开局，等待玩家加入。');
-    return G;
+    return freshRed7G(ctx, '房间已创建：最多 4 人，至少 2 人即可开局，等待玩家加入。');
   },
 
   phases: {
@@ -487,6 +502,9 @@ export const Red7Game = {
         activePlayers: { all: 'play' },
 
         onBegin: ({ G, ctx, events }) => {
+          // 仅在本局进行中的 play 阶段推进回合：
+          // 本局已结束（等待返回房间）或状态已被 backToLobby 重置（lobby.started=false）时冻结
+          if (ctx.phase !== 'play' || G.ended || !G.lobby?.started) return;
           // 重置本回合的打牌 / 弃牌次数与进阶规则状态
           G.turnPlayed = false;
           G.turnDiscarded = false;
@@ -494,9 +512,7 @@ export const Red7Game = {
           G.pending = null;
           const active = G.playOrder.filter((id) => !G.players[id].eliminated);
           if (active.length === 1) {
-            G.roundWinner = active[0];
-            G.ended = true;
-            G.log.push(`玩家 ${pLabel(active[0])} 是唯一剩下的玩家，赢得本轮。`);
+            endRound(G, active[0]);
             return;
           }
           const playerID = ctx.currentPlayer;
@@ -521,6 +537,7 @@ export const Red7Game = {
       client: false,
       move: ({ G, ctx, playerID }, handIndex) => {
         if (ctx.phase !== 'play') return INVALID_MOVE;
+        if (G.ended) return INVALID_MOVE; // 本局已结束，等待返回房间
         if (playerID !== ctx.currentPlayer) return INVALID_MOVE;
         if (G.pending) return INVALID_MOVE; // 有待结算效果，需先结算
         const p = G.players[playerID];
@@ -577,6 +594,7 @@ export const Red7Game = {
       client: false,
       move: ({ G, ctx, playerID }, handIndex) => {
         if (ctx.phase !== 'play') return INVALID_MOVE;
+        if (G.ended) return INVALID_MOVE; // 本局已结束，等待返回房间
         if (playerID !== ctx.currentPlayer) return INVALID_MOVE;
         if (G.pending) return INVALID_MOVE; // 有待结算效果，需先结算
         if (G.turnDiscarded) return INVALID_MOVE; // 本回合已弃牌到画布
@@ -609,6 +627,7 @@ export const Red7Game = {
       client: false,
       move: ({ G, ctx, playerID, events }) => {
         if (ctx.phase !== 'play') return INVALID_MOVE;
+        if (G.ended) return INVALID_MOVE; // 本局已结束，等待返回房间
         if (playerID !== ctx.currentPlayer) return INVALID_MOVE;
         if (G.pending) return INVALID_MOVE; // 有待结算效果，需先结算
         const p = G.players[playerID];
@@ -630,6 +649,7 @@ export const Red7Game = {
       client: false,
       move: ({ G, ctx, playerID }, targetPlayerID, paletteIndex) => {
         if (ctx.phase !== 'play') return INVALID_MOVE;
+        if (G.ended) return INVALID_MOVE; // 本局已结束，等待返回房间
         if (playerID !== ctx.currentPlayer) return INVALID_MOVE;
         const pending = G.pending;
         if (!pending || pending.type !== 'action1') return INVALID_MOVE;
@@ -655,6 +675,7 @@ export const Red7Game = {
       client: false,
       move: ({ G, ctx, playerID }, paletteIndex) => {
         if (ctx.phase !== 'play') return INVALID_MOVE;
+        if (G.ended) return INVALID_MOVE; // 本局已结束，等待返回房间
         if (playerID !== ctx.currentPlayer) return INVALID_MOVE;
         const pending = G.pending;
         if (!pending || pending.type !== 'action7') return INVALID_MOVE;
@@ -684,6 +705,7 @@ export const Red7Game = {
       client: false,
       move: ({ G, ctx, playerID, events }) => {
         if (ctx.phase !== 'play') return INVALID_MOVE;
+        if (G.ended) return INVALID_MOVE; // 本局已结束，等待返回房间
         if (playerID !== ctx.currentPlayer) return INVALID_MOVE;
         if (G.pending) return INVALID_MOVE; // 有待结算效果，需先结算
         if (G.mustPlay) return INVALID_MOVE; // 打出5后必须继续打
@@ -696,11 +718,21 @@ export const Red7Game = {
     },
 
     /**
-     * 房主结束本局：仅作为广播信号，标记本局被房主主动结束。
+     * 结束本局并返回房间大厅：
+     * - 本局自然结束（G.ended）后，任意玩家可调用，全员回到大厅；
+     * - 游戏进行中仅房主（座位 0）可调用。
+     * 调用后清空上局全部游戏信息（重置为全新大厅状态），房间回到等待阶段，可开始新一局。
      */
-    endGame: ({ G, playerID }) => {
-      if (playerID !== '0') return INVALID_MOVE; // 仅房主（座位 0）可结束
-      G.hostEnded = true;
+    backToLobby: ({ G, ctx, playerID, events }) => {
+      if (!G.lobby || !G.lobby.started) return INVALID_MOVE; // 大厅阶段不可用
+      if (!G.ended && playerID !== '0') return INVALID_MOVE; // 进行中仅房主可结束
+      const endedByHost = !G.ended;
+      const fresh = freshRed7G(ctx, endedByHost
+        ? '房主已结束本局，房间已重置，可开始新一局。'
+        : '本局已结束，房间已重置，可开始新一局。');
+      for (const k of Object.keys(G)) delete G[k];
+      Object.assign(G, fresh);
+      events.setPhase('lobby');
       return undefined;
     },
   },
@@ -726,12 +758,10 @@ export const Red7Game = {
   },
 
   /**
-   * 结束条件与结算：仅剩一名玩家时结束，该玩家获胜。
+   * 结束条件：仅剩一名玩家时结束，该玩家获胜。
+   * 结算数据由 endRound 写入 G.results，不设置 ctx.gameover，
+   * 以便结束后能执行「返回房间」并复用房间。
    */
-  endIf: ({ G }) => {
-    if (!G.ended) return undefined;
-    return { winners: [G.roundWinner], reason: '仅剩一名玩家' };
-  },
 };
 
 export default Red7Game;

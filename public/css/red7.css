@@ -40,8 +40,8 @@
     0 12px 24px rgba(0,0,0,0.55);
 }
 .r7-card-dimmed { opacity: 0.45; filter: grayscale(0.6); }
-/* 非关键牌 / 画布区历史弃牌：弱化但保留颜色，突出关键牌与当前生效牌 */
-.r7-card-soft { opacity: 0.5; }
+/* 非关键牌 / 画布区历史弃牌：弱化（降透明 + 去饱和），突出关键牌与当前生效牌 */
+.r7-card-soft { opacity: 0.4; filter: grayscale(0.35); }
 /* 大卡右上角数字特效标记（1/3/5/7）：小闪电 */
 .r7-card-fx-badge {
   position: absolute;

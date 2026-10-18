@@ -28,7 +28,7 @@ let seenCardIds = new Set(); // 已出现过的卡牌 id，用于给新牌播放
 let prevEnded = false;       // 上一帧是否已结束（用于一次性触发翻牌/得分滚动）
 let justEnded = false;       // 本帧是否为游戏结束瞬间
 const loadedCSS = new Set(); // 已动态加载的游戏 CSS 路径（去重）
-const CSS_VERSION = '17';     // CSS 版本号：样式更新时递增，防止浏览器缓存旧样式
+const CSS_VERSION = '18';     // CSS 版本号：样式更新时递增，防止浏览器缓存旧样式
 
 /** 当前游戏的 boardgame.io 名称（大厅路由键），未选择时为空串。 */
 function gameName() {
@@ -110,6 +110,7 @@ async function readErrorMessage(res, fallback) {
   }
   if (res.status === 403) {
     if (/游戏已开始/.test(serverMsg)) return '游戏已开始，无法加入';
+    if (/昵称已被/.test(serverMsg)) return serverMsg;
     return '请先填写昵称';
   }
   return serverMsg || `${fallback}（${res.status}）`;
@@ -297,7 +298,8 @@ function renderPlayers(G, ctx, playerID, fates) {
   const nicknames = nicknameMap();
   for (const id of ctx.playOrder) {
     const p = G.players[id];
-    const isCurrent = id === ctx.currentPlayer;
+    // 与 Red7 一致：本局结束后不再高亮当前回合玩家
+    const isCurrent = !G.ended && id === ctx.currentPlayer;
     const isMe = id === playerID;
     // 即时得分预览（按权重；背面牌未知，暂不计）
     let preview = 0;
@@ -308,7 +310,12 @@ function renderPlayers(G, ctx, playerID, fates) {
       if (fate === 'favored') preview += w;
       else if (fate === 'disfavored') preview -= w;
     }
-    const node = el('div', { class: `territory ${isCurrent ? 'active' : ''} ${isMe ? 'me' : ''}` }, [
+    // 回合状态角标文案（与 Red7 一致）：仅标记当前回合玩家，自己→轮到你了，他人→该玩家行动中
+    const turnText = isCurrent ? (isMe ? '轮到你了' : '该玩家行动中') : '';
+    const node = el('div', {
+      class: `territory ${isCurrent ? 'active' : ''} ${isMe ? 'me' : ''}`,
+      'data-turn-text': turnText,
+    }, [
       el('div', { class: 'territory-head' }, [
         el('span', { class: 'territory-name' }, [playerNameNode(id, nicknames, { me: isMe })]),
         el('span', { class: 'territory-score', text: `得分 ${preview}` }),
@@ -416,7 +423,7 @@ function renderHand(G, playerID, active) {
 /** 刺客结算面板 */
 function renderAssassinPanel(state) {
   const { G, ctx, playerID } = state;
-  const isActive = !ctx.gameover && ctx.currentPlayer === playerID;
+  const isActive = !G.results && ctx.currentPlayer === playerID;
   const pending = G.pendingAssassin;
   const panel = $('#play-panel');
   panel.innerHTML = '';
@@ -463,10 +470,10 @@ function renderAssassinPanel(state) {
 
 function renderPlayPanel(state) {
   const { G, ctx, playerID } = state;
-  const isActive = !ctx.gameover && ctx.currentPlayer === playerID;
+  const isActive = !G.results && ctx.currentPlayer === playerID;
   const panel = $('#play-panel');
 
-  if (ctx.gameover) return;
+  if (G.results) return;
 
   // 有待结算的刺客效果，且仅当前操作玩家可见并结算；其他玩家仅提示等待
   if (G.pendingAssassin && isActive) {
@@ -582,14 +589,26 @@ function renderTaskPanel(G, playerID) {
   }
 }
 
-function renderGameover(ctx) {
+/**
+ * 结算面板通用的「回到房间」按钮（点击后广播 backToLobby，全员退回大厅并清空本局）。
+ * 所有游戏的结算界面统一复用，避免重复实现。
+ */
+function backToLobbyButton() {
+  return el('button', {
+    class: 'btn btn-primary go-back-lobby',
+    text: '回到房间（开始新一局）',
+    onClick: () => client.moves.backToLobby(),
+  });
+}
+
+function renderGameover(G) {
   const box = $('#gameover');
-  if (!ctx.gameover) {
+  if (!G.results) {
     box.style.display = 'none';
     box.innerHTML = '';
     return;
   }
-  const { winners, scores, territoryScores, taskResults, fates } = ctx.gameover;
+  const { winners, scores, territoryScores, taskResults, fates } = G.results;
   const nicknames = nicknameMap();
   box.style.display = 'block';
   box.innerHTML = '';
@@ -624,25 +643,26 @@ function renderGameover(ctx) {
     ]);
   });
   box.appendChild(el('div', { class: 'fate-row' }, fateRows));
+  box.appendChild(backToLobbyButton());
 }
 
 function renderQuanc(state) {
   if (!state) return;
   currentState = state;
   const { G, ctx, playerID } = state;
-  justEnded = !!ctx.gameover && !prevEnded;
-  prevEnded = !!ctx.gameover;
+  justEnded = !!G.results && !prevEnded;
+  prevEnded = !!G.results;
   const fates = computeFamilyFates(G.table);
   renderHeader(G);
   renderPlayers(G, ctx, playerID, fates);
   renderTable(G, fates);
   renderTaskPanel(G, playerID);
   // 有刺客待结算时禁用选牌
-  const canPick = !ctx.gameover && ctx.currentPlayer === playerID && !G.pendingAssassin;
+  const canPick = !G.ended && ctx.currentPlayer === playerID && !G.pendingAssassin;
   renderHand(G, playerID, canPick);
   renderPlayPanel(state);
   renderLog(G);
-  renderGameover(ctx);
+  renderGameover(G);
 }
 
 // ---------- Red7 渲染 ----------
@@ -656,6 +676,14 @@ function red7CardLabel(card) {
 function resetRed7Selection() {
   selectedIndex = null;
   prevForcedAction = false;
+}
+
+/** 重置与单局渲染相关的临时状态（进入房间 / 返回房间大厅时调用）。 */
+function resetGameUIState() {
+  resetRed7Selection();
+  seenCardIds.clear();
+  prevEnded = false;
+  justEnded = false;
 }
 
 /** Red7 卡牌节点：数字 + 颜色底；keyColor 用于关键牌脉冲特效（跟随当前规则色）。 */
@@ -757,7 +785,7 @@ function renderRed7Players(G, ctx, playerID) {
   for (const id of G.playOrder) {
     const p = G.players[id];
     const isMe = id === playerID;
-    const isCurrent = !ctx.gameover && id === ctx.currentPlayer;
+    const isCurrent = !G.ended && id === ctx.currentPlayer;
     const eliminated = p.eliminated;
     const winning = !eliminated && winners.includes(id);
     const cls = ['territory', 'r7-palette'];
@@ -766,7 +794,7 @@ function renderRed7Players(G, ctx, playerID) {
     if (eliminated) cls.push('r7-eliminated');
     // 回合状态角标文案：仅标记当前回合玩家，自己→轮到你了，他人→该玩家行动中
     let turnText = '';
-    if (!ctx.gameover && !eliminated && isCurrent) {
+    if (!G.ended && !eliminated && isCurrent) {
       turnText = isMe ? '轮到你了' : '该玩家行动中';
     }
     const handCount = Array.isArray(p.hand) ? p.hand.length : p.hand;
@@ -957,14 +985,14 @@ function renderRed7PlayPanel(state) {
   panel.innerHTML = '';
 
   // 强制行动（打出 5 须续打 / 打出 1、7 待结算）：面板脉冲强调，并在出现时自动滚动定位
-  const forced = !ctx.gameover && ctx.currentPlayer === playerID && !!(G.pending || G.mustPlay);
+  const forced = !G.ended && ctx.currentPlayer === playerID && !!(G.pending || G.mustPlay);
   panel.classList.toggle('r7-forced', forced);
   if (forced && !prevForcedAction) {
     requestAnimationFrame(() => panel.scrollIntoView({ behavior: 'smooth', block: 'center' }));
   }
   prevForcedAction = forced;
 
-  if (ctx.gameover) return;
+  if (G.results) return;
 
   const isMyTurn = ctx.currentPlayer === playerID;
   if (!isMyTurn) {
@@ -1049,9 +1077,9 @@ function renderRed7PlayPanel(state) {
 }
 
 /** 结算：仅显示获胜者。 */
-function renderRed7Gameover(ctx) {
+function renderRed7Gameover(G) {
   const box = $('#gameover');
-  if (!ctx.gameover) {
+  if (!G.results) {
     box.style.display = 'none';
     box.innerHTML = '';
     return;
@@ -1062,10 +1090,11 @@ function renderRed7Gameover(ctx) {
   box.appendChild(el('h2', { text: '本轮结束' }));
   box.appendChild(el('p', { class: 'go-summary' }, [
     el('span', { text: '获胜者：' }),
-    ...ctx.gameover.winners.flatMap((w, i) => (i === 0
+    ...G.results.winners.flatMap((w, i) => (i === 0
       ? [playerNameNode(w, nicknames)]
       : [el('span', { text: '、' }), playerNameNode(w, nicknames)])),
   ]));
+  box.appendChild(backToLobbyButton());
 }
 
 /** Red7 统一渲染。 */
@@ -1078,10 +1107,10 @@ function renderRed7(state) {
   renderRed7Header(G);
   renderRed7RuleArea(G);
   renderRed7Players(G, ctx, playerID);
-  renderRed7Hand(G, playerID, !ctx.gameover && ctx.currentPlayer === playerID && !G.pending);
+  renderRed7Hand(G, playerID, !G.ended && ctx.currentPlayer === playerID && !G.pending);
   renderRed7PlayPanel(state);
   renderLog(G);
-  renderRed7Gameover(ctx);
+  renderRed7Gameover(G);
 }
 
 // ---------- 渲染分发 ----------
@@ -1388,10 +1417,11 @@ function showGameScreen() {
   }
   $('#game-title').textContent = currentGame ? currentGame.title : '';
   $('#match-id').textContent = currentMatchID;
-  // 进行中仅房主（座位 0）可结束；游戏结束后所有玩家都可退出返回游戏库
+  // 进行中仅房主（座位 0）可结束；本局结束后所有玩家都可返回房间大厅
   const isHost = !!roomInfo && roomInfo.playerID === '0';
-  const isGameover = !!(currentState && currentState.ctx && currentState.ctx.gameover);
+  const isGameover = !!(currentState && currentState.G && currentState.G.results);
   $('#end-game-btn').style.display = (isHost || isGameover) ? '' : 'none';
+  $('#end-game-btn').textContent = isGameover ? '回到房间' : '结束游戏';
 }
 
 /** 创建 / 加入成功后进入房间：立刻建立游戏连接，在大厅阶段等待房主开始。 */
@@ -1402,10 +1432,7 @@ function enterRoom(matchID, playerID, credentials, playerName) {
   saveSession(); // 记录会话，刷新后可自动恢复
   inGameScreen = false;
   currentState = null;
-  resetRed7Selection();
-  seenCardIds.clear();
-  prevEnded = false;
-  justEnded = false;
+  resetGameUIState();
   currentMatchID = matchID;
   showLobbyScreen();
   renderLobby(null);
@@ -1428,12 +1455,6 @@ function enterRoom(matchID, playerID, credentials, playerName) {
       return;
     }
 
-    // 房主结束本局：所有玩家退出游戏页，回到设置界面
-    if (state.G && state.G.hostEnded) {
-      setTimeout(() => resetToLibrary('本局已结束，可返回游戏库重新选择游戏。'), 300);
-      return;
-    }
-
     const view = { ...state, playerID };
     currentState = view;
     const phase = state.ctx && state.ctx.phase;
@@ -1445,6 +1466,8 @@ function enterRoom(matchID, playerID, credentials, playerName) {
       return;
     }
 
+    // 回到大厅阶段（进入房间 / 本局结束返回房间）：重置单局界面状态
+    resetGameUIState();
     // 大厅阶段：以服务端状态为准自动准备（幂等，且可在丢包/竞争时重发）
     if (state.isConnected && view.G?.lobby && !view.G.lobby.ready[roomInfo.playerID]) {
       client.moves.lobbyReady();
@@ -1582,23 +1605,23 @@ function bindRoomEvents() {
   });
 }
 
-/** 游戏页事件：复制对局 ID、结束本局（不结算，清除本局信息，退回大厅）。 */
+/** 游戏页事件：复制对局 ID、结束本局 / 回到房间（清空本局信息，全员退回大厅，房间可复用）。 */
 function bindGameEvents() {
   $('#copy-match-btn').addEventListener('click', () => {
     if (currentMatchID) copyText(currentMatchID, $('#copy-match-btn'), '复制');
   });
 
   $('#end-game-btn').addEventListener('click', () => {
-    // 游戏已结束：任何玩家点击都各自退出（boardgame.io 拒绝 gameover 后的 move，无法广播）
-    const isGameover = !!(currentState && currentState.ctx && currentState.ctx.gameover);
+    // 本局已自然结束：任意玩家点击均可让全员回到房间大厅（可开始新一局）
+    const isGameover = !!(currentState && currentState.G && currentState.G.results);
     if (isGameover) {
-      resetToLibrary('本局已结束，可返回游戏库重新选择游戏。');
+      client.moves.backToLobby();
       return;
     }
-    // 进行中：仅房主可结束，并通过 move 广播给所有玩家统一退出
+    // 进行中：仅房主可结束，并通过 move 广播给所有玩家统一返回房间大厅
     if (!roomInfo || roomInfo.playerID !== '0') return;
-    if (!window.confirm('确定要结束本局吗？本局信息将被清除，且不做结算。')) return;
-    client.moves.endGame();
+    if (!window.confirm('确定要结束本局吗？本局信息将被清除且不做结算，所有玩家将回到房间大厅。')) return;
+    client.moves.backToLobby();
   });
 }
 
