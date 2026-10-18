@@ -226,7 +226,6 @@ label input, label select {
   border: 1px solid rgba(255,255,255,0.08);
   position: relative; /* 供「当前回合」角标定位 */
 }
-.territory.me { background: rgba(212,160,23,0.14); }
 /* 当前回合玩家：加粗金色描边 + 呼吸式外发光 + 角标，一眼可辨 */
 .territory.active {
   border: 3px solid #ffd966;
@@ -242,8 +241,9 @@ label input, label select {
   animation: turn-glow 1.8s ease-in-out infinite;
   pointer-events: none;
 }
-.territory.active::after {
-  content: '当前回合';
+/* 回合状态角标：文案由 JS 写入 data-turn-text 属性（轮到你了 / 当前回合 / 等待其他玩家行动） */
+.territory[data-turn-text]:not([data-turn-text=""])::after {
+  content: attr(data-turn-text);
   position: absolute; top: -11px; right: 10px;
   background: #ffd966; color: #1a1a1a;
   font-size: 11px; font-weight: 700; line-height: 1.5;

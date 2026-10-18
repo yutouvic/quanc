@@ -40,18 +40,55 @@
     0 12px 24px rgba(0,0,0,0.55);
 }
 .r7-card-dimmed { opacity: 0.45; filter: grayscale(0.6); }
-/* 关键牌：边框脉冲内发光，颜色跟随当前规则色（--kc 由 JS 注入）。
-   性能优化：阴影固定在伪元素上，仅动画 opacity。 */
-.r7-card-key { --kc: #ffd966; }
-.r7-card-key::after {
-  content: '';
-  position: absolute; inset: 0;
-  border-radius: inherit;
-  box-shadow:
-    0 0 0 2px color-mix(in srgb, var(--kc) 90%, transparent),
-    0 0 14px 4px color-mix(in srgb, var(--kc) 65%, transparent);
-  animation: r7-glow-pulse 1.6s ease-in-out infinite;
+/* 非关键牌 / 画布区历史弃牌：弱化但保留颜色，突出关键牌与当前生效牌 */
+.r7-card-soft { opacity: 0.5; }
+/* 大卡右上角数字特效标记（1/3/5/7）：小闪电 */
+.r7-card-fx-badge {
+  position: absolute;
+  top: 4px; right: 4px;
+  font-size: 16px; line-height: 1;
+  color: #ffe082;
+  text-shadow: 0 0 6px rgba(255, 217, 102, 0.9), 0 1px 2px rgba(0,0,0,0.6);
   pointer-events: none;
+}
+/* 关键牌：从上到下的流光特效（光带沿边框环自上而下扫过）。
+   性能优化：用 transform: translateY 移动光带（GPU 合成层，不触发重绘），
+   外层 .r7-key-sheen-wrap 用 mask 固定裁剪边框环，不随内层移动。
+   颜色跟随当前规则色（--kc 由 JS 注入）。 */
+.r7-card-key { --kc: #ffd966; }
+.r7-key-sheen-wrap {
+  position: absolute; inset: -2px;
+  border-radius: inherit;
+  padding: 2px;
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  pointer-events: none;
+  overflow: hidden;
+}
+.r7-key-sheen {
+  position: absolute;
+  left: 0; right: 0;
+  top: 0; height: 300%;
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    transparent 33%,
+    color-mix(in srgb, var(--kc) 55%, transparent) 47%,
+    #ffffff 50%,
+    color-mix(in srgb, var(--kc) 55%, transparent) 53%,
+    transparent 67%,
+    transparent 100%
+  );
+  transform: translateY(-66.67%);
+  will-change: transform;
+  animation: r7-key-sheen 2s linear infinite;
+}
+@keyframes r7-key-sheen {
+  0%   { transform: translateY(-66.67%); }
+  100% { transform: translateY(33.33%); }
 }
 .r7-card-mini {
   width: var(--mini-w); height: var(--mini-h);
@@ -152,16 +189,7 @@
     rgba(255,255,255,0.05);
   border: 1px solid color-mix(in srgb, var(--c) 45%, transparent);
 }
-/* 边框脉冲：阴影固定在伪元素上，仅动画 opacity（不逐帧重绘阴影）。
-   卡片 overflow:hidden，用 inset 内发光避免外发光被裁剪。 */
-.r7-tip::before {
-  content: '';
-  position: absolute; inset: 0;
-  border-radius: inherit;
-  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--c) 80%, transparent), inset 0 0 16px color-mix(in srgb, var(--c) 55%, transparent);
-  animation: r7-glow-pulse 1.8s ease-in-out infinite;
-  pointer-events: none;
-}
+/* tip 卡片边框：无发光效果，仅依赖 border 本身 */
 .r7-tip-head {
   padding: 7px 12px;
   font-size: 16px; font-weight: 800; letter-spacing: 2px; color: #f5d67b;
@@ -186,7 +214,45 @@
 .r7-preview-state-ok { background: rgba(95,208,138,0.22); color: #7fe0a3; }
 .r7-preview-state-off { background: rgba(255,255,255,0.1); color: #aaa; }
 .r7-preview-line { font-size: 13px; line-height: 1.55; opacity: 0.92; }
-.r7-preview-fx { color: #ffd966; font-weight: 600; }
+/* 触发数字特效（1/3/5/7）：醒目标出——金色背景 + 左侧色条 + ⚡ 前缀 + 脉冲外发光 */
+.r7-preview-fx {
+  position: relative;
+  color: #ffe082;
+  font-weight: 700;
+  background: rgba(255, 217, 102, 0.12);
+  border-left: 3px solid #ffd966;
+  padding: 3px 8px;
+  border-radius: 0 6px 6px 0;
+}
+.r7-preview-fx::before { content: '⚡ '; }
+/* 脉冲发光：阴影固定，仅动画 opacity */
+.r7-preview-fx::after {
+  content: '';
+  position: absolute; inset: 0;
+  border-radius: inherit;
+  box-shadow: 0 0 10px 2px rgba(255, 217, 102, 0.55);
+  animation: r7-glow-pulse 1.6s ease-in-out infinite;
+  pointer-events: none;
+}
+/* 触发画布额外摸牌：与数字特效一致的金色风格 + 🃏 前缀 + 脉冲外发光 */
+.r7-preview-draw {
+  position: relative;
+  color: #ffe082;
+  font-weight: 700;
+  background: rgba(255, 217, 102, 0.12);
+  border-left: 3px solid #ffd966;
+  padding: 3px 8px;
+  border-radius: 0 6px 6px 0;
+}
+.r7-preview-draw::before { content: '🃏 '; }
+.r7-preview-draw::after {
+  content: '';
+  position: absolute; inset: 0;
+  border-radius: inherit;
+  box-shadow: 0 0 10px 2px rgba(255, 217, 102, 0.55);
+  animation: r7-glow-pulse 1.6s ease-in-out infinite;
+  pointer-events: none;
+}
 
 /* ========== Red7 调色盘 ========== */
 .r7-palette { min-width: 180px; }
@@ -221,11 +287,16 @@
   .r7-card-mini:hover { transform: none; }
 }
 
-/* 系统偏好「减少动态效果」时停用 Red7 选中态动画、关键牌脉冲与强制面板脉冲 */
+/* 系统偏好「减少动态效果」时停用 Red7 选中态动画、关键牌流光与强制面板脉冲 */
 @media (prefers-reduced-motion: reduce) {
   .r7-card.r7-card-selected { animation: none; }
-  .r7-card-key::after { animation: none; opacity: 0.8; }
+  .r7-key-sheen {
+    animation: none;
+    transform: translateY(0);
+    background: linear-gradient(color-mix(in srgb, var(--kc) 70%, transparent), color-mix(in srgb, var(--kc) 70%, transparent));
+  }
   .play-panel.r7-forced::before { animation: none; opacity: 0.8; }
   .btn-end-suggest::after { animation: none; opacity: 0.8; }
-  .r7-tip::before { animation: none; opacity: 0.8; }
+  .r7-preview-fx::after { animation: none; opacity: 0.6; }
+  .r7-preview-draw::after { animation: none; opacity: 0.6; }
 }

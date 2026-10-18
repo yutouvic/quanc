@@ -28,7 +28,7 @@ let seenCardIds = new Set(); // 已出现过的卡牌 id，用于给新牌播放
 let prevEnded = false;       // 上一帧是否已结束（用于一次性触发翻牌/得分滚动）
 let justEnded = false;       // 本帧是否为游戏结束瞬间
 const loadedCSS = new Set(); // 已动态加载的游戏 CSS 路径（去重）
-const CSS_VERSION = '6';     // CSS 版本号：样式更新时递增，防止浏览器缓存旧样式
+const CSS_VERSION = '16';     // CSS 版本号：样式更新时递增，防止浏览器缓存旧样式
 
 /** 当前游戏的 boardgame.io 名称（大厅路由键），未选择时为空串。 */
 function gameName() {
@@ -659,19 +659,31 @@ function resetRed7Selection() {
 }
 
 /** Red7 卡牌节点：数字 + 颜色底；keyColor 用于关键牌脉冲特效（跟随当前规则色）。 */
-function red7CardNode(card, { mini = false, selected = false, onClick = undefined, dimmed = false, key = false, keyColor = undefined } = {}) {
+function red7CardNode(card, { mini = false, selected = false, onClick = undefined, dimmed = false, key = false, keyColor = undefined, soft = false } = {}) {
   const color = RED7_COLORS[card.colorIndex];
   const cls = ['r7-card'];
   if (mini) cls.push('r7-card-mini');
   if (selected) cls.push('r7-card-selected');
   if (dimmed) cls.push('r7-card-dimmed');
   if (key) cls.push('r7-card-key');
+  if (soft) cls.push('r7-card-soft');
   const attrs = { class: cls.join(' '), style: `--c:${color.color}${key && keyColor ? `;--kc:${keyColor}` : ''}` };
   if (onClick) { attrs.role = 'button'; attrs.tabindex = '0'; attrs.onClick = onClick; }
-  return el('div', attrs, [
+  // 大卡右上角：数字 1/3/5/7 为特效牌，显示小闪电标记
+  const kids = [
     el('div', { class: 'r7-num', text: String(card.number) }),
     el('div', { class: 'r7-color', text: card.colorName }),
-  ]);
+  ];
+  if (!mini && [1, 3, 5, 7].includes(card.number)) {
+    kids.push(el('div', { class: 'r7-card-fx-badge', text: '⚡', title: '数字特效牌' }));
+  }
+  // key 牌：嵌套流光元素（外层 mask 固定裁剪边框，内层 transform 移动光带，GPU 加速）
+  if (key) {
+    kids.push(el('div', { class: 'r7-key-sheen-wrap' }, [
+      el('div', { class: 'r7-key-sheen' }),
+    ]));
+  }
+  return el('div', attrs, kids);
 }
 
 /** 头部信息：当前规则 + 剩余人数。 */
@@ -720,11 +732,14 @@ function renderRed7RuleArea(G) {
     })),
   ]));
 
-  // 画布区弃牌堆（无独立标题，间距收紧）
+  // 画布区弃牌堆（无独立标题，间距收紧）；仅最上方一张为当前生效规则牌，其余历史牌弱化
   container.appendChild(el('div', { class: 'r7-canvas' }, [
     G.canvas.length === 0
       ? el('span', { class: 'empty-hint', text: '尚未弃牌，当前为初始规则' })
-      : el('div', { class: 'r7-canvas-cards' }, G.canvas.map((c) => red7CardNode(c, { mini: true }))),
+      : el('div', { class: 'r7-canvas-cards' }, G.canvas.map((c, i) => {
+          const isActive = i === G.canvas.length - 1;
+          return red7CardNode(c, { mini: true, soft: !isActive });
+        })),
   ]));
 }
 
@@ -749,6 +764,11 @@ function renderRed7Players(G, ctx, playerID) {
     if (isMe) cls.push('me');
     if (isCurrent) cls.push('active');
     if (eliminated) cls.push('r7-eliminated');
+    // 回合状态角标文案：仅标记当前回合玩家，自己→轮到你了，他人→该玩家行动中
+    let turnText = '';
+    if (!ctx.gameover && !eliminated && isCurrent) {
+      turnText = isMe ? '轮到你了' : '该玩家行动中';
+    }
     const handCount = Array.isArray(p.hand) ? p.hand.length : p.hand;
     const rightKids = [el('span', { class: 'r7-hand-count', text: `手牌 ${handCount}` })];
     if (eliminated) rightKids.push(el('span', { class: 'r7-badge r7-badge-out', text: '已出局' }));
@@ -757,7 +777,7 @@ function renderRed7Players(G, ctx, playerID) {
       el('span', { class: 'territory-name' }, [playerNameNode(id, nicknames, { me: isMe })]),
       el('span', { class: 'r7-head-right' }, rightKids),
     ];
-    container.appendChild(el('div', { class: cls.join(' ') }, [
+    container.appendChild(el('div', { class: cls.join(' '), 'data-turn-text': turnText }, [
       el('div', { class: 'territory-head' }, headKids),
       el('div', { class: 'territory-cards' },
         p.palette.length === 0
@@ -765,7 +785,10 @@ function renderRed7Players(G, ctx, playerID) {
           : (() => {
               const keyIds = new Set(ruleKeyCards(G.ruleColorIndex, p.palette).map((k) => k.id));
               const keyColor = RED7_COLORS[G.ruleColorIndex].color;
-              return p.palette.map((c) => red7CardNode(c, { mini: true, dimmed: eliminated, key: !eliminated && keyIds.has(c.id), keyColor }));
+              return p.palette.map((c) => {
+                const isKey = !eliminated && keyIds.has(c.id);
+                return red7CardNode(c, { mini: true, dimmed: eliminated, key: isKey, keyColor, soft: !eliminated && !isKey });
+              });
             })(),
       ),
     ]));
@@ -789,8 +812,14 @@ function renderRed7Hand(G, playerID, isMyTurn) {
     container.appendChild(red7CardNode(card, {
       selected: selectedIndex === idx,
       onClick: isMyTurn ? () => {
-        selectedIndex = (selectedIndex === idx ? null : idx);
-        renderGame(currentState);
+        // 打出 5 后强制续打：直接点击手牌即打出，无需选中再点按钮
+        if (G.mustPlay) {
+          client.moves.playCard(idx);
+          resetRed7Selection();
+        } else {
+          selectedIndex = (selectedIndex === idx ? null : idx);
+          renderGame(currentState);
+        }
       } : undefined,
     }));
   });
@@ -881,7 +910,7 @@ function renderRed7ActionPreview(panel, state, card) {
     discardLines.push(el('div', { class: 'r7-preview-line', text: `规则切换为「${rule.name}：${rule.rule}」。` }));
     if (card.number > paletteCount) {
       discardLines.push(deckCount > 0
-        ? el('div', { class: 'r7-preview-line r7-preview-fx', text: `触发特殊摸牌：点数 ${card.number} > 调色盘 ${paletteCount} 张 → 摸 1 张牌。` })
+        ? el('div', { class: 'r7-preview-line r7-preview-draw', text: `触发特殊摸牌：点数 ${card.number} > 调色盘 ${paletteCount} 张 → 摸 1 张牌。` })
         : el('div', { class: 'r7-preview-line', text: `点数 ${card.number} > 调色盘 ${paletteCount} 张，但摸牌堆已空，无法摸牌。` }));
     } else {
       discardLines.push(el('div', { class: 'r7-preview-line', text: `点数 ${card.number} ≤ 调色盘 ${paletteCount} 张，不满足特殊摸牌条件。` }));
@@ -946,6 +975,12 @@ function renderRed7PlayPanel(state) {
   const played = G.turnPlayed;
   const discarded = G.turnDiscarded;
   const mustPlay = G.mustPlay;
+
+  // 打出 5 后强制续打：不显示操作按钮，直接点击手牌即可打出
+  if (mustPlay) {
+    panel.appendChild(el('div', { class: 'r7-hint r7-hint-forced', text: '打出 5：必须继续打出 1 张牌，请直接点击手牌。' }));
+    return;
+  }
 
   const hasSel = selectedIndex != null && selectedIndex < hand.length;
   const canPlay = hasSel && (!played || mustPlay);

@@ -73,7 +73,11 @@ function shuffleDeck(deck, random) {
   return shuffled;
 }
 
-/** 取一组牌中「最大」的一张：先比数字，再比颜色强弱。 */
+/**
+ * 取一组牌中「最大」的一张：Red7 的核心比较原则——先比点数，再比颜色强弱。
+ * 点数是第一优先级，颜色仅在点数相同时作为 tie-breaker（红 > 橙 > 黄 > 绿 > 青 > 蓝 > 紫）。
+ * 此函数被所有规则的平局判定与高亮选牌复用，请勿改动比较顺序。
+ */
 function bestCard(cards) {
   let best = null;
   for (const c of cards) {
@@ -125,18 +129,30 @@ function ruleKey(ruleIndex, palette) {
       return [maxCount, bestNumber, b ? colorRank(b.colorIndex) : -1];
     }
     case 2: {
-      // 黄：同一颜色最多
+      // 黄：同一颜色最多，并列时先比该色最大牌点数，再比颜色强弱
       const counts = new Map();
-      for (const c of cards) counts.set(c.colorIndex, (counts.get(c.colorIndex) || 0) + 1);
+      const maxNumByColor = new Map();
+      for (const c of cards) {
+        counts.set(c.colorIndex, (counts.get(c.colorIndex) || 0) + 1);
+        const cur = maxNumByColor.get(c.colorIndex);
+        if (cur === undefined || c.number > cur) maxNumByColor.set(c.colorIndex, c.number);
+      }
       let maxCount = 0;
       let bestColor = -1;
+      let bestMaxNum = -1;
       for (const [ci, cnt] of counts) {
-        if (cnt > maxCount || (cnt === maxCount && colorRank(ci) > colorRank(bestColor))) {
+        const ciMaxNum = maxNumByColor.get(ci) || -1;
+        if (
+          cnt > maxCount ||
+          (cnt === maxCount && ciMaxNum > bestMaxNum) ||
+          (cnt === maxCount && ciMaxNum === bestMaxNum && colorRank(ci) > colorRank(bestColor))
+        ) {
           maxCount = cnt;
           bestColor = ci;
+          bestMaxNum = ciMaxNum;
         }
       }
-      return [maxCount, bestColor === -1 ? -1 : colorRank(bestColor), 0];
+      return [maxCount, bestMaxNum, bestColor === -1 ? -1 : colorRank(bestColor)];
     }
     case 3: {
       // 绿：偶数牌最多
@@ -214,15 +230,27 @@ export function ruleKeyCards(ruleIndex, palette) {
       return cards.filter((c) => c.number === bestNumber);
     }
     case 2: {
-      // 黄：同颜色最多的牌
+      // 黄：同颜色最多的牌，并列时先比该色最大牌点数，再比颜色强弱
       const counts = new Map();
-      for (const c of cards) counts.set(c.colorIndex, (counts.get(c.colorIndex) || 0) + 1);
+      const maxNumByColor = new Map();
+      for (const c of cards) {
+        counts.set(c.colorIndex, (counts.get(c.colorIndex) || 0) + 1);
+        const cur = maxNumByColor.get(c.colorIndex);
+        if (cur === undefined || c.number > cur) maxNumByColor.set(c.colorIndex, c.number);
+      }
       let maxCount = 0;
       let bestColor = -1;
+      let bestMaxNum = -1;
       for (const [ci, cnt] of counts) {
-        if (cnt > maxCount || (cnt === maxCount && colorRank(ci) > colorRank(bestColor))) {
+        const ciMaxNum = maxNumByColor.get(ci) || -1;
+        if (
+          cnt > maxCount ||
+          (cnt === maxCount && ciMaxNum > bestMaxNum) ||
+          (cnt === maxCount && ciMaxNum === bestMaxNum && colorRank(ci) > colorRank(bestColor))
+        ) {
           maxCount = cnt;
           bestColor = ci;
+          bestMaxNum = ciMaxNum;
         }
       }
       return cards.filter((c) => c.colorIndex === bestColor);
