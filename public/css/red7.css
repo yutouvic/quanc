@@ -133,7 +133,6 @@
 }
 .r7-rule-color { font-size: 17px; font-weight: 800; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.5); }
 .r7-rule-text { font-size: 14px; font-weight: 700; }
-.r7-rule-card-current { margin-left: auto; display: flex; align-items: center; }
 
 /* 规则一览（7 种颜色规则，当前规则高亮）：紧贴上方当前规则条 */
 .r7-rule-list { margin-top: -2px; }
@@ -223,6 +222,21 @@
 }
 .r7-tip-section + .r7-tip-section { border-left: 1px solid rgba(255,255,255,0.08); }
 .r7-tip-section-off { opacity: 0.55; }
+/* tip 框底部：结束回合按钮（不依赖选牌，独立于两个行动小节） */
+.r7-tip-foot {
+  display: flex; justify-content: flex-end; gap: 8px;
+  padding: 9px 12px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+/* tip 框内嵌的操作按钮：靠左、加粗放大，更醒目 */
+.r7-tip-section .btn {
+  margin-top: 6px; align-self: flex-start;
+  font-weight: 700; padding: 8px 16px; font-size: 14px;
+}
+/* 打出到调色盘 / 确认打出：金色主操作 + 外发光强调 */
+.r7-action-play {
+  box-shadow: 0 0 12px 2px rgba(212, 160, 23, 0.45);
+}
 @media (max-width: 560px) {
   .r7-tip-section + .r7-tip-section { border-left: none; border-top: 1px solid rgba(255,255,255,0.08); }
 }

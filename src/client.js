@@ -19,6 +19,7 @@ let client = null;
 let currentState = null;     // 最近一次渲染所用的状态
 let currentGame = null;      // 当前选中的游戏条目（registry 中的元数据 + game 对象）
 let selectedIndex = null;    // 当前选中的手牌索引
+let pendingPick = null;      // pending 结算中选中的牌 { type: 'action1'|'action7', targetPlayerID?, paletteIndex }
 let prevForcedAction = false; // 上一帧是否处于强制行动（用于自动定位只触发一次）
 let currentMatchID = null;   // 当前对局 ID（用于展示与复制）
 let roomInfo = null;         // 当前房间信息 { matchID, playerID, credentials }
@@ -27,6 +28,7 @@ let currentPlayerName = '';  // 当前玩家昵称（用于恢复会话时回填
 let seenCardIds = new Set(); // 已出现过的卡牌 id，用于给新牌播放进入动画
 let prevEnded = false;       // 上一帧是否已结束（用于一次性触发翻牌/得分滚动）
 let justEnded = false;       // 本帧是否为游戏结束瞬间
+let prevCardLocations = new Map(); // 上一帧的「卡牌 id → 逻辑位置」映射，用于 diff 出移动/新增/消失以播放飞行动画
 const loadedCSS = new Set(); // 已动态加载的游戏 CSS 路径（去重）
 const CSS_VERSION = '19';     // CSS 版本号：样式更新时递增，防止浏览器缓存旧样式
 
@@ -180,7 +182,7 @@ function handCardNode(card, { onClick, selected = false } = {}) {
   if (selected) cls.push('card-selected');
   if (markNew(card)) cls.push('card-enter');
   const f = getFamily(card.family) || { name: card.familyName, icon: '', color: '#888' };
-  const attrs = { class: cls.join(' '), style: `--c:${f.color}` };
+  const attrs = { class: cls.join(' '), style: `--c:${f.color}`, 'data-card-id': card.id };
   if (onClick) { attrs.role = 'button'; attrs.tabindex = '0'; attrs.onClick = onClick; }
 
   const typeSvg = TYPE_ICONS[card.type];
@@ -211,6 +213,7 @@ function miniCardNode(card, { onClick, disabled = false, title = '' } = {}) {
     const attrs = {
       class: cls.join(' '),
       title: title || '间谍（背面，游戏结束时翻开）',
+      'data-card-id': card.id,
     };
     if (onClick && !disabled) { attrs.role = 'button'; attrs.tabindex = '0'; attrs.onClick = onClick; }
     return el('div', attrs, [
@@ -225,7 +228,7 @@ function miniCardNode(card, { onClick, disabled = false, title = '' } = {}) {
   if (disabled) cls.push('card-disabled');
   if (markNew(card)) cls.push('card-enter');
   if (justEnded && card.type === 'spy') cls.push('card-flip');
-  const attrs = { class: cls.join(' '), style: `--c:${f.color}`, title };
+  const attrs = { class: cls.join(' '), style: `--c:${f.color}`, title, 'data-card-id': card.id };
   if (onClick && !disabled) { attrs.role = 'button'; attrs.tabindex = '0'; attrs.onClick = onClick; }
 
   const typeKids = [el('span', { text: card.typeName })];
@@ -675,6 +678,7 @@ function red7CardLabel(card) {
 /** 清空 Red7 的选中手牌与强制行动标记。 */
 function resetRed7Selection() {
   selectedIndex = null;
+  pendingPick = null;
   prevForcedAction = false;
 }
 
@@ -684,6 +688,7 @@ function resetGameUIState() {
   seenCardIds.clear();
   prevEnded = false;
   justEnded = false;
+  prevCardLocations = new Map(); // 清空牌位置快照，新一局首次渲染不播放飞行动画
 }
 
 /** Red7 卡牌节点：数字 + 颜色底；keyColor 用于关键牌脉冲特效（跟随当前规则色）。 */
@@ -696,7 +701,7 @@ function red7CardNode(card, { mini = false, selected = false, onClick = undefine
   if (key) cls.push('r7-card-key');
   if (soft) cls.push('r7-card-soft');
   if (!onClick) cls.push('r7-card-static');
-  const attrs = { class: cls.join(' '), style: `--c:${color.color}${key && keyColor ? `;--kc:${keyColor}` : ''}` };
+  const attrs = { class: cls.join(' '), style: `--c:${color.color}${key && keyColor ? `;--kc:${keyColor}` : ''}`, 'data-card-id': card.id };
   if (onClick) { attrs.role = 'button'; attrs.tabindex = '0'; attrs.onClick = onClick; }
   // 大卡右上角：数字 1/3/5/7 为特效牌，显示小闪电标记
   const kids = [
@@ -726,7 +731,6 @@ function renderRed7RuleArea(G) {
   const container = $('#table');
   container.innerHTML = '';
   const rule = RED7_COLORS[G.ruleColorIndex];
-  const currentCard = G.canvas.length > 0 ? G.canvas[G.canvas.length - 1] : null;
 
   // 区域标题：画布区
   container.appendChild(el('div', { class: 'section-label section-label-canvas' }, [
@@ -734,16 +738,13 @@ function renderRed7RuleArea(G) {
     el('span', { class: 'section-label-sub', text: '弃牌到此改变规则' }),
   ]));
 
-  // 当前生效规则牌
+  // 当前生效规则
   const curKids = [
     el('div', { class: 'r7-rule-chip', style: `--c:${rule.color}` }, [
       el('span', { class: 'r7-rule-color', text: rule.name }),
     ]),
     el('div', { class: 'r7-rule-text', text: `${rule.name}规则：${rule.rule}` }),
   ];
-  if (currentCard) {
-    curKids.push(el('div', { class: 'r7-rule-card-current' }, [red7CardNode(currentCard, { mini: true })]));
-  }
   container.appendChild(el('div', { class: 'r7-rule', style: `--c:${rule.color}` }, curKids));
 
   // 7 种颜色规则一览（当前规则高亮）
@@ -848,14 +849,9 @@ function renderRed7Hand(G, playerID, isMyTurn) {
     container.appendChild(red7CardNode(card, {
       selected: selectedIndex === idx,
       onClick: isMyTurn ? () => {
-        // 打出 5 后强制续打：直接点击手牌即打出，无需选中再点按钮
-        if (G.mustPlay) {
-          client.moves.playCard(idx);
-          resetRed7Selection();
-        } else {
-          selectedIndex = (selectedIndex === idx ? null : idx);
-          renderGame(currentState);
-        }
+        // 统一「点击选中 → 在行动面板确认」：mustPlay 也先选中，由 tip 框内的按钮确认
+        selectedIndex = (selectedIndex === idx ? null : idx);
+        renderGame(currentState);
       } : undefined,
     }));
   });
@@ -878,10 +874,31 @@ function renderRed7PendingPanel(state) {
       const palette = G.players[id].palette;
       panel.appendChild(el('div', { class: 'dest-row' }, [
         el('span', { class: 'dest-title' }, [playerNameNode(id, nicknames)]),
-        el('div', { class: 'dest-buttons' }, palette.map((card, idx) => red7CardNode(card, {
-          mini: true,
-          onClick: () => client.moves.resolveAction1(id, idx),
-        }))),
+        el('div', { class: 'dest-buttons' }, palette.map((card, idx) => {
+          const picked = pendingPick && pendingPick.type === 'action1'
+            && pendingPick.targetPlayerID === id && pendingPick.paletteIndex === idx;
+          return red7CardNode(card, {
+            mini: true,
+            selected: picked,
+            onClick: () => {
+              pendingPick = { type: 'action1', targetPlayerID: id, paletteIndex: idx };
+              renderGame(currentState);
+            },
+          });
+        })),
+      ]));
+    }
+    // 选中后显示「移除」确认按钮
+    if (pendingPick && pendingPick.type === 'action1') {
+      panel.appendChild(el('div', { class: 'dest-row' }, [
+        el('button', {
+          class: 'btn btn-sm btn-primary r7-action-play',
+          text: '移除',
+          onClick: () => {
+            client.moves.resolveAction1(pendingPick.targetPlayerID, pendingPick.paletteIndex);
+            pendingPick = null;
+          },
+        }),
       ]));
     }
   } else if (pending.type === 'action7') {
@@ -890,10 +907,30 @@ function renderRed7PendingPanel(state) {
     const candidates = me.palette
       .map((card, idx) => ({ card, idx }))
       .filter(({ card }) => card.id !== pending.cardId);
-    panel.appendChild(el('div', { class: 'dest-buttons' }, candidates.map(({ card, idx }) => red7CardNode(card, {
-      mini: true,
-      onClick: () => client.moves.resolveAction7(idx),
-    }))));
+    panel.appendChild(el('div', { class: 'dest-buttons' }, candidates.map(({ card, idx }) => {
+      const picked = pendingPick && pendingPick.type === 'action7' && pendingPick.paletteIndex === idx;
+      return red7CardNode(card, {
+        mini: true,
+        selected: picked,
+        onClick: () => {
+          pendingPick = { type: 'action7', paletteIndex: idx };
+          renderGame(currentState);
+        },
+      });
+    })));
+    // 选中后显示「弃置到画布」确认按钮（本次弃置也可能触发摸牌）
+    if (pendingPick && pendingPick.type === 'action7') {
+      panel.appendChild(el('div', { class: 'dest-row' }, [
+        el('button', {
+          class: 'btn btn-sm btn-primary r7-action-play',
+          text: '弃置到画布',
+          onClick: () => {
+            client.moves.resolveAction7(pendingPick.paletteIndex);
+            pendingPick = null;
+          },
+        }),
+      ]));
+    }
   }
 }
 
@@ -905,7 +942,7 @@ function renderRed7ActionPreview(panel, state, card) {
   const { G, playerID } = state;
   const me = G.players[playerID];
   const canPlay = !G.turnPlayed || G.mustPlay;
-  const canDiscard = !G.turnDiscarded;
+  const canDiscard = !G.turnDiscarded && !G.mustPlay;
   const paletteCount = me.palette.length;
   // playerView 后 deck 为张数（数字）
   const deckCount = typeof G.deck === 'number' ? G.deck : 0;
@@ -955,7 +992,21 @@ function renderRed7ActionPreview(panel, state, card) {
     discardLines.push(el('div', { class: 'r7-preview-line', text: '本回合已弃牌到画布，每回合限 1 次。' }));
   }
 
-  const previewSection = (title, ok, lines) => el('div', {
+  // 特效提示文案：打出 1/3/5/7 触发特效、弃置点数大于调色盘数触发摸牌
+  const playTriggers = [1, 3, 5, 7].includes(card.number);
+  const discardDraw = card.number > paletteCount && deckCount > 0;
+
+  // 操作回调（点击即执行，按钮文案已提示将触发的特效）
+  const play = () => { client.moves.playCard(selectedIndex); resetRed7Selection(); };
+  const discard = () => { client.moves.discardToCanvas(selectedIndex); resetRed7Selection(); };
+  const end = () => { client.moves.endTurn(); resetRed7Selection(); };
+
+  // 建议结束回合（结束回合按钮高亮引导）
+  const winning = computeWinningIds(G).includes(playerID);
+  const noMoreOps = G.turnPlayed && G.turnDiscarded && !G.mustPlay;
+  const suggestEnd = !G.mustPlay && (winning || noMoreOps);
+
+  const previewSection = (title, ok, lines, btn) => el('div', {
     class: `r7-tip-section ${ok ? '' : 'r7-tip-section-off'}`,
   }, [
     el('div', { class: 'r7-preview-title' }, [
@@ -963,17 +1014,32 @@ function renderRed7ActionPreview(panel, state, card) {
       el('span', { class: `r7-preview-state ${ok ? 'r7-preview-state-ok' : 'r7-preview-state-off'}`, text: ok ? '可用' : '不可用' }),
     ]),
     ...lines,
+    btn,
   ]);
 
-  // 合并为单个「游戏小tip」卡片：头部 + 两个行动小节
+  // 合并为单个「游戏小tip」卡片：头部 + 两个行动小节（内含对应操作按钮）+ 底部结束回合
   panel.appendChild(el('div', {
     class: 'r7-tip',
     style: `--c:${RED7_COLORS[card.colorIndex].color}`,
   }, [
     el('div', { class: 'r7-tip-head', text: `游戏小tip · ${red7CardLabel(card)}` }),
     el('div', { class: 'r7-tip-body' }, [
-      previewSection('打出到调色盘', canPlay, playLines),
-      previewSection('弃置到画布', canDiscard, discardLines),
+      previewSection('打出到调色盘', canPlay, playLines, el('button', {
+        class: 'btn btn-sm btn-primary r7-action-play',
+        text: G.mustPlay ? '确认打出' : playTriggers ? '打出到调色盘（可触发特效）' : '打出到调色盘',
+        disabled: canPlay ? false : 'disabled', onClick: play,
+      })),
+      previewSection('弃置到画布', canDiscard, discardLines, el('button', {
+        class: 'btn btn-sm btn-primary r7-action-play',
+        text: discardDraw ? '弃置到画布（可摸1张牌）' : '弃置到画布',
+        disabled: canDiscard ? false : 'disabled', onClick: discard,
+      })),
+    ]),
+    el('div', { class: 'r7-tip-foot' }, [
+      el('button', {
+        class: `btn btn-sm btn-primary ${suggestEnd ? 'btn-end-suggest' : ''}`,
+        text: '结束回合', disabled: G.mustPlay ? 'disabled' : false, onClick: end,
+      }),
     ]),
   ]));
 }
@@ -1012,55 +1078,28 @@ function renderRed7PlayPanel(state) {
   const discarded = G.turnDiscarded;
   const mustPlay = G.mustPlay;
 
-  // 打出 5 后强制续打：不显示操作按钮，直接点击手牌即可打出
-  if (mustPlay) {
-    panel.appendChild(el('div', { class: 'r7-hint r7-hint-forced', text: '打出 5：必须继续打出 1 张牌，请直接点击手牌。' }));
-    return;
-  }
-
   const hasSel = selectedIndex != null && selectedIndex < hand.length;
-  const canPlay = hasSel && (!played || mustPlay);
-  const canDiscard = hasSel && !discarded;
-  const canEnd = !mustPlay;
 
   // 建议结束回合：已处于优胜，或本回合打出/弃置次数均已用完（仅剩结束回合可操作）
   const winning = computeWinningIds(G).includes(playerID);
   const noMoreOps = played && discarded && !mustPlay;
   const suggestEnd = !mustPlay && (winning || noMoreOps);
 
-  // 三个按钮始终显示，超出使用次数或未选牌则置灰
-  const buttons = [
-    el('button', {
-      class: 'btn btn-sm',
-      text: '打出到调色盘',
-      disabled: canPlay ? false : 'disabled',
-      onClick: () => { client.moves.playCard(selectedIndex); resetRed7Selection(); },
-    }),
-    el('button', {
-      class: 'btn btn-sm',
-      text: '弃置到画布',
-      disabled: canDiscard ? false : 'disabled',
-      onClick: () => { client.moves.discardToCanvas(selectedIndex); resetRed7Selection(); },
-    }),
-    el('button', {
-      class: `btn btn-sm btn-primary ${suggestEnd ? 'btn-end-suggest' : ''}`,
-      text: '结束回合',
-      disabled: canEnd ? false : 'disabled',
-      onClick: () => { client.moves.endTurn(); resetRed7Selection(); },
-    }),
-  ];
-
+  // 提示文案：mustPlay 下提示必须续打；普通状态下区分未选牌 / 已选牌 / 无操作
   let hint;
-  if (noMoreOps) {
+  if (mustPlay) {
+    hint = hasSel
+      ? `已选：${red7CardLabel(hand[selectedIndex])}。点击「确认打出」继续。`
+      : '打出 5：必须继续打出 1 张牌，请先点击选择一张手牌。';
+  } else if (noMoreOps) {
     hint = null; // 无可用操作次数时不再提示选牌（下方有结束回合引导）
   } else if (hand.length === 0) {
     hint = '手牌已空，可结束回合。';
   } else if (!hasSel) {
     hint = '请先点击选择一张手牌。';
   } else {
-    hint = `已选：${red7CardLabel(hand[selectedIndex])}。选择行动：`;
+    hint = `已选：${red7CardLabel(hand[selectedIndex])}。`;
   }
-  if (mustPlay) hint = `打出 5：必须继续打出 1 张牌。 ${hint || ''}`;
 
   if (hint) panel.appendChild(el('div', { class: `r7-hint ${mustPlay ? 'r7-hint-forced' : ''}`, text: hint }));
 
@@ -1071,9 +1110,20 @@ function renderRed7PlayPanel(state) {
       : '你已处于优胜状态，点击「结束回合」保住领先。';
     panel.appendChild(el('div', { class: 'r7-hint r7-hint-suggest', text: tip }));
   }
-  // 新手提示：选中手牌后展示两种行动的规则效果预览
-  if (hasSel) renderRed7ActionPreview(panel, state, hand[selectedIndex]);
-  panel.appendChild(el('div', { class: 'dest-row' }, buttons));
+
+  if (hasSel && !noMoreOps) {
+    // 选中手牌：tip 框内展示两种行动的规则效果预览与对应操作按钮（含结束回合）
+    renderRed7ActionPreview(panel, state, hand[selectedIndex]);
+  } else if (!mustPlay) {
+    // 未选牌或已无其他操作：保留「结束回合」按钮（不依赖选牌）
+    panel.appendChild(el('div', { class: 'dest-row' }, [
+      el('button', {
+        class: `btn btn-sm btn-primary ${suggestEnd ? 'btn-end-suggest' : ''}`,
+        text: '结束回合',
+        onClick: () => { client.moves.endTurn(); resetRed7Selection(); },
+      }),
+    ]));
+  }
 }
 
 /** 结算：仅显示获胜者。 */
@@ -1124,10 +1174,157 @@ const GAME_RENDERERS = {
   [Red7Game.name]: renderRed7,
 };
 
-/** 按当前对局的游戏分发渲染。 */
+// ---------- 卡牌飞行动画（FLIP：First / Last / Invert / Play） ----------
+
+/** Red7：提取每张牌当前的逻辑位置（playerView 后 G 可用）。 */
+function red7CardLocations(G) {
+  const map = new Map();
+  for (const id of Object.keys(G.players || {})) {
+    const p = G.players[id];
+    if (Array.isArray(p.hand)) for (const c of p.hand) map.set(c.id, 'hand');
+    if (Array.isArray(p.palette)) for (const c of p.palette) map.set(c.id, `palette:${id}`);
+  }
+  if (Array.isArray(G.canvas)) for (const c of G.canvas) map.set(c.id, 'canvas');
+  return map;
+}
+
+/** Quanc：提取每张牌当前的逻辑位置。 */
+function quancCardLocations(G) {
+  const map = new Map();
+  for (const id of Object.keys(G.players || {})) {
+    const p = G.players[id];
+    if (Array.isArray(p.hand)) for (const c of p.hand) map.set(c.id, 'hand');
+    if (Array.isArray(p.territory)) for (const c of p.territory) map.set(c.id, `territory:${id}`);
+  }
+  const table = G.table || {};
+  if (Array.isArray(table.favored)) for (const c of table.favored) map.set(c.id, 'table:favored');
+  if (Array.isArray(table.disfavored)) for (const c of table.disfavored) map.set(c.id, 'table:disfavored');
+  // discard 不在界面上渲染，不纳入位置映射：被刺客移除的牌视为「消失」，播放飞出动画
+  return map;
+}
+
+/** 摸牌飞入动画的起点锚点：手牌区上方（牌堆方向），退回 header 牌堆信息。 */
+function deckAnchorRect() {
+  const hand = $('#hand');
+  if (hand) {
+    const r = hand.getBoundingClientRect();
+    return { left: r.left + r.width / 2, top: r.top - 24 };
+  }
+  const info = $('#deck-info');
+  if (info) {
+    const r = info.getBoundingClientRect();
+    return { left: r.left + r.width / 2, top: r.top };
+  }
+  return { left: window.innerWidth / 2, top: 0 };
+}
+
+/** 按当前对局的游戏分发渲染，并在渲染前后做卡牌飞行动画。 */
 function renderGame(state) {
+  if (!state) return;
   const fn = currentGame && GAME_RENDERERS[currentGame.game.name];
-  if (fn) fn(state);
+  if (!fn) return;
+
+  const G = state.G || {};
+  const locFn = currentGame.game.name === Red7Game.name ? red7CardLocations : quancCardLocations;
+  const currLocs = locFn(G);
+  const firstRender = prevCardLocations.size === 0;
+
+  // First：记录将移动/消失的牌旧位置，识别新牌
+  const oldRects = new Map();
+  const moved = [];
+  const added = [];
+  const removed = [];
+  if (!firstRender) {
+    // 一次性收集旧卡牌节点建索引，避免逐张 querySelector 反复遍历 DOM
+    const oldNodes = new Map();
+    for (const n of document.querySelectorAll('[data-card-id]')) oldNodes.set(n.dataset.cardId, n);
+
+    for (const [id, to] of currLocs) {
+      const from = prevCardLocations.get(id);
+      const node = oldNodes.get(id);
+      if (node) {
+        if (from !== to) {
+          oldRects.set(id, node.getBoundingClientRect());
+          moved.push({ id, from, to });
+        }
+      } else if (from === undefined) {
+        added.push({ id });
+      }
+    }
+    for (const [id] of prevCardLocations) {
+      if (!currLocs.has(id)) {
+        const node = oldNodes.get(id);
+        if (node) removed.push({ clone: node.cloneNode(true), rect: node.getBoundingClientRect() });
+      }
+    }
+  }
+
+  // 渲染（全量重建 DOM，同步执行）
+  fn(state);
+
+  // Last + Invert + Play：确有移动/新增时才建新节点索引并补间
+  if (moved.length || added.length) {
+    const newNodes = new Map();
+    for (const n of document.querySelectorAll('[data-card-id]')) newNodes.set(n.dataset.cardId, n);
+
+    for (const m of moved) {
+      const node = newNodes.get(m.id);
+      const or = oldRects.get(m.id);
+      if (!node || !or) continue;
+      const nr = node.getBoundingClientRect();
+      const dx = or.left - nr.left;
+      const dy = or.top - nr.top;
+      if (dx || dy) {
+        node.animate(
+          [{ transform: `translate(${dx}px,${dy}px)` }, { transform: 'translate(0,0)' }],
+          { duration: 420, easing: 'cubic-bezier(.22,.68,.35,1)' },
+        );
+      }
+    }
+
+    if (added.length) {
+      const anchor = deckAnchorRect();
+      for (const a of added) {
+        const node = newNodes.get(a.id);
+        if (!node) continue;
+        node.classList.remove('card-enter'); // 移除 CSS 弹入动画，避免与飞入动画叠加冲突
+        const nr = node.getBoundingClientRect();
+        const dx = anchor.left - nr.left;
+        const dy = anchor.top - nr.top;
+        node.animate(
+          [
+            { transform: `translate(${dx}px,${dy}px) scale(0.7)`, opacity: 0 },
+            { transform: 'translate(0,0) scale(1)', opacity: 1 },
+          ],
+          { duration: 480, easing: 'ease-out' },
+        );
+      }
+    }
+  }
+
+  // 消失牌：用克隆节点在原位置播放飞出
+  for (const r of removed) {
+    r.clone.removeAttribute('data-card-id'); // 克隆节点不参与后续节点索引
+    r.clone.style.position = 'fixed';
+    r.clone.style.left = `${r.rect.left}px`;
+    r.clone.style.top = `${r.rect.top}px`;
+    r.clone.style.width = `${r.rect.width}px`;
+    r.clone.style.height = `${r.rect.height}px`;
+    r.clone.style.margin = '0';
+    r.clone.style.zIndex = '9999';
+    r.clone.style.pointerEvents = 'none';
+    document.body.appendChild(r.clone);
+    const anim = r.clone.animate(
+      [
+        { transform: 'translate(0,0)', opacity: 1 },
+        { transform: 'translate(0,-26px) scale(0.72)', opacity: 0 },
+      ],
+      { duration: 460, easing: 'ease-in' },
+    );
+    anim.onfinish = () => r.clone.remove();
+  }
+
+  prevCardLocations = currLocs;
 }
 
 // ---------- 房间等待界面 ----------

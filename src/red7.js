@@ -693,6 +693,12 @@ export const Red7Game = {
         G.pending = null;
         const rule = RED7_COLORS[card.colorIndex];
         G.log.push(`打出 7：弃置 ${describeCard(card)} 到画布，规则改为「${rule.name}：${rule.rule}」。`);
+        // 与弃置到画布一致的摸牌规则：弃置牌点数 > 弃置后调色盘牌数 → 摸 1 张
+        if (card.number > p.palette.length && G.deck.length > 0) {
+          const drawn = G.deck.shift();
+          p.hand.push(drawn);
+          G.log.push(`弃牌点数大于调色盘牌数，摸 1 张牌（${describeCard(drawn)}）。`);
+        }
         return undefined;
       },
     },
