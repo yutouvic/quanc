@@ -28,7 +28,7 @@ let seenCardIds = new Set(); // 已出现过的卡牌 id，用于给新牌播放
 let prevEnded = false;       // 上一帧是否已结束（用于一次性触发翻牌/得分滚动）
 let justEnded = false;       // 本帧是否为游戏结束瞬间
 const loadedCSS = new Set(); // 已动态加载的游戏 CSS 路径（去重）
-const CSS_VERSION = '18';     // CSS 版本号：样式更新时递增，防止浏览器缓存旧样式
+const CSS_VERSION = '19';     // CSS 版本号：样式更新时递增，防止浏览器缓存旧样式
 
 /** 当前游戏的 boardgame.io 名称（大厅路由键），未选择时为空串。 */
 function gameName() {
