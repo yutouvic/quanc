@@ -197,7 +197,6 @@ label input, label select {
 /* ========== 游戏界面布局 ========== */
 .game-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
 .game-header-right { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: flex-end; }
-.deck-info { font-size: 14px; opacity: 0.85; }
 
 /* 对局 ID 展示 */
 .match-info { display: flex; align-items: center; gap: 6px; font-size: 13px; opacity: 0.9; }

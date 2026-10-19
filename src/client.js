@@ -7,6 +7,7 @@ import { Client } from 'boardgame.io/client';
 import { SocketIO } from 'boardgame.io/multiplayer';
 import { QuancGame, computeFamilyFates, pLabel, getTask } from './quanc.js';
 import { Red7Game, RED7_COLORS, computeWinningIds, ruleKeyCards, effectiveRuleIndex } from './red7.js';
+import { RegicideGame, RG_SUITS, rgDiscardValue } from './regicide.js';
 import { GAMES, getGame } from './games.js';
 import { FAMILIES, getFamily } from './quanc-cards.js';
 import { FAMILY_ICONS, TYPE_ICONS, BACK_EMBLEM } from './quanc-icons.js';
@@ -30,7 +31,9 @@ let prevEnded = false;       // 上一帧是否已结束（用于一次性触发
 let justEnded = false;       // 本帧是否为游戏结束瞬间
 let prevCardLocations = new Map(); // 上一帧的「卡牌 id → 逻辑位置」映射，用于 diff 出移动/新增/消失以播放飞行动画
 const loadedCSS = new Set(); // 已动态加载的游戏 CSS 路径（去重）
-const CSS_VERSION = '19';     // CSS 版本号：样式更新时递增，防止浏览器缓存旧样式
+const CSS_VERSION = '20';     // CSS 版本号：样式更新时递增，防止浏览器缓存旧样式
+let rgSelected = [];         // Regicide 手牌多选索引（连招 / 承伤弃牌共用）
+let prevRgForced = false;    // Regicide 上一帧是否处于强制结算（用于自动定位只触发一次）
 
 /** 当前游戏的 boardgame.io 名称（大厅路由键），未选择时为空串。 */
 function gameName() {
@@ -260,12 +263,6 @@ function miniCardList(cards, opts = {}) {
 }
 
 // ---------- 渲染 ----------
-
-function renderHeader(G) {
-  const deckNum = typeof G.deck === 'number' ? G.deck : G.deck.length;
-  $('#deck-info').textContent =
-    `第 ${G.round} 轮 · 本局移除 ${G.removedCount} 张 · 牌堆剩余 ${deckNum} 张`;
-}
 
 /** 根据 boardgame.io 推送的房间元数据构建「座位号 → 昵称」映射，玩家面板与结算面板共用。 */
 function nicknameMap() {
@@ -656,7 +653,6 @@ function renderQuanc(state) {
   justEnded = !!G.results && !prevEnded;
   prevEnded = !!G.results;
   const fates = computeFamilyFates(G.table);
-  renderHeader(G);
   renderPlayers(G, ctx, playerID, fates);
   renderTable(G, fates);
   renderTaskPanel(G, playerID);
@@ -682,9 +678,16 @@ function resetRed7Selection() {
   prevForcedAction = false;
 }
 
+/** 清空 Regicide 的选中手牌与强制行动标记。 */
+function resetRegicideSelection() {
+  rgSelected = [];
+  prevRgForced = false;
+}
+
 /** 重置与单局渲染相关的临时状态（进入房间 / 返回房间大厅时调用）。 */
 function resetGameUIState() {
   resetRed7Selection();
+  resetRegicideSelection();
   seenCardIds.clear();
   prevEnded = false;
   justEnded = false;
@@ -718,12 +721,6 @@ function red7CardNode(card, { mini = false, selected = false, onClick = undefine
     ]));
   }
   return el('div', attrs, kids);
-}
-
-/** 头部信息：仅剩余人数（当前规则在画布区展示，避免重复）。 */
-function renderRed7Header(G) {
-  const activeCount = G.playOrder.filter((id) => !G.players[id].eliminated).length;
-  $('#deck-info').textContent = `剩余 ${activeCount} 人`;
 }
 
 /** 画布区：当前生效规则牌 + 7 种颜色规则一览（当前高亮）+ 弃牌堆历史。 */
@@ -1154,13 +1151,467 @@ function renderRed7(state) {
   const { G, ctx, playerID } = state;
   const taskPanel = $('#task-panel');
   if (taskPanel) taskPanel.style.display = 'none';
-  renderRed7Header(G);
   renderRed7RuleArea(G);
   renderRed7Players(G, ctx, playerID);
   renderRed7Hand(G, playerID, !G.ended && ctx.currentPlayer === playerID && !G.pending);
   renderRed7PlayPanel(state);
   renderLog(G);
   renderRed7Gameover(G);
+}
+
+// ---------- Regicide 渲染 ----------
+
+/** Regicide 卡牌文字标签。 */
+function rgCardLabel(card) {
+  return card.isJoker ? '小丑' : `${card.suitName}${card.rank}`;
+}
+
+/** Regicide 卡牌节点：点数 + 花色（mini 用于弃牌堆 / 战利品）。 */
+function rgCardNode(card, { mini = false, selected = false, dimmed = false, onClick = undefined } = {}) {
+  const cls = ['rg-card'];
+  if (mini) cls.push('rg-card-mini');
+  if (selected) cls.push('rg-card-selected');
+  if (dimmed) cls.push('rg-card-dimmed');
+  if (card.isJoker) cls.push('rg-card-joker');
+  if (!onClick) cls.push('rg-card-static');
+  const attrs = { class: cls.join(' '), style: `--c:${card.color || '#777'}`, 'data-card-id': card.id };
+  if (onClick) { attrs.role = 'button'; attrs.tabindex = '0'; attrs.onClick = onClick; }
+  const kids = card.isJoker
+    ? [el('div', { class: 'rg-num', text: '🃏' }), el('div', { class: 'rg-suit', text: '小丑' })]
+    : [el('div', { class: 'rg-num', text: card.rank }), el('div', { class: 'rg-suit', text: `${card.symbol} ${card.suitName}` })];
+  return el('div', attrs, kids);
+}
+
+/** 客户端预估本回合打出所选牌的总伤害（免疫只挡技能不挡伤害 + 梅花双倍），与服务端逻辑一致。 */
+function rgPreviewDamage(G, cards) {
+  if (!G.enemy) return 0;
+  const immune = G.jokerUsed ? null : G.enemy.suit;
+  let damage = 0;
+  let hasClub = false;
+  for (const c of cards) {
+    if (c.isJoker) continue;
+    damage += rgDiscardValue(c); // 免疫花色伤害仍计入；Boss 牌按承伤计值（J10/Q15/K20）
+    if (c.suit === 'club' && c.suit !== immune) hasClub = true; // 梅花技能被免疫则不翻倍
+  }
+  return hasClub ? damage * 2 : damage;
+}
+
+/**
+ * Regicide 花色技能看板：4 花色一览，标注
+ * - 免疫：当前敌人同花色（技能不发动，伤害仍计入）；小丑打出后显示「免疫解除」
+ * - 将触发：当前已选中手牌包含该花色
+ * - 护盾生效：♠ 护盾累计值（直到该敌人被击败）
+ */
+function rgSuitBoard(G, playerID) {
+  const shortDesc = {
+    heart: '弃牌堆恢复牌到酒馆底',
+    diamond: '玩家们顺时针轮流摸牌',
+    club: '本回合伤害 ×2',
+    spade: '累计护盾抵御反击',
+  };
+  // 当前选中手牌包含的花色（用于「将触发」提示）
+  const me = G.players[playerID];
+  const myHand = me && Array.isArray(me.hand) ? me.hand : [];
+  const selectedSuits = new Set(
+    rgSelected
+      .filter((i) => i < myHand.length)
+      .map((i) => myHand[i])
+      .filter((c) => !c.isJoker)
+      .map((c) => c.suit),
+  );
+  const enemySuit = G.enemy ? G.enemy.suit : null;
+
+  return el('div', { class: 'rg-suits' },
+    RG_SUITS.map((s) => {
+      const badges = [];
+      if (enemySuit === s.id) {
+        badges.push(G.jokerUsed
+          ? el('span', { class: 'rg-badge rg-badge-free', text: '免疫解除' })
+          : el('span', { class: 'rg-badge rg-badge-immune', text: '免疫技能' }));
+      }
+      if (selectedSuits.has(s.id)) {
+        badges.push(el('span', { class: 'rg-badge rg-badge-active', text: '将触发' }));
+      }
+      if (s.id === 'spade' && (G.shield || 0) > 0) {
+        badges.push(el('span', { class: 'rg-badge rg-badge-shield', text: `护盾 ${G.shield}` }));
+      }
+      return el('div', { class: 'rg-suit-item', style: `--c:${s.color}` }, [
+        el('span', { class: 'rg-suit-symbol', text: s.symbol }),
+        el('span', { class: 'rg-suit-info' }, [
+          el('span', { class: 'rg-suit-name', text: `${s.name} · ${s.ability.split('：')[0]}` }),
+          el('span', { class: 'rg-suit-desc', text: shortDesc[s.id] }),
+        ]),
+        badges.length ? el('span', { class: 'rg-suit-badges' }, badges) : null,
+      ].filter(Boolean));
+    }));
+}
+
+/** Regicide 战场：当前敌人（血量 / 攻击 / 免疫 / 护盾）+ 花色技能看板 + 牌堆信息 + 战利品。 */
+function renderRegicideTable(G, playerID) {
+  const container = $('#table');
+  container.innerHTML = '';
+
+  container.appendChild(el('div', { class: 'section-label section-label-canvas' }, [
+    el('span', { text: '战场' }),
+    el('span', { class: 'section-label-sub', text: '击败敌人，或承受其反击' }),
+  ]));
+
+  // 当前敌人
+  if (G.enemy) {
+    const e = G.enemy;
+    const hpPct = Math.max(0, Math.round((e.hp / e.maxHp) * 100));
+    const nextDmg = Math.max(0, e.attack - (G.shield || 0));
+    container.appendChild(el('div', { class: 'rg-enemy', style: `--c:${e.color}` }, [
+      rgCardNode(e, {}),
+      el('div', { class: 'rg-enemy-stats' }, [
+        el('div', { class: 'rg-enemy-name', text: `${e.suitName} ${e.rank}` }),
+        el('div', { class: 'rg-hpbar' }, [el('div', { class: 'rg-hp-fill', style: `width:${hpPct}%` })]),
+        el('div', { class: 'rg-enemy-line', text: `血量 ${e.hp}/${e.maxHp}` }),
+        el('div', { class: 'rg-enemy-line', text: `伤害：${nextDmg} 点（攻击 ${e.attack} − 护盾 ${G.shield || 0}）` }),
+        el('div', { class: 'rg-enemy-badges' }, [
+          G.jokerUsed
+            ? el('span', { class: 'rg-badge rg-badge-free', text: '小丑：免疫已解除' })
+            : el('span', { class: 'rg-badge rg-badge-immune', text: `免疫 ${e.suitName} 技能` }),
+          (G.shield || 0) > 0 ? el('span', { class: 'rg-badge rg-badge-shield', text: `♠ 护盾 ${G.shield}` }) : null,
+        ].filter(Boolean)),
+      ]),
+    ]));
+  } else if (!G.ended) {
+    container.appendChild(el('div', { class: 'empty-hint', text: '等待敌人登场…' }));
+  }
+
+  // 花色技能看板：免疫花色 / 当前选中触发 / 护盾生效
+  container.appendChild(rgSuitBoard(G, playerID));
+
+  // 牌堆信息行：城堡 / 酒馆 / 弃牌堆（公开信息；弃牌堆仅展示最新 10 张）
+  const c = G.castle || {};
+  const discardAll = G.discard || [];
+  const discardTop = discardAll.slice(-10);
+  container.appendChild(el('div', { class: 'rg-piles' }, [
+    el('div', { class: 'rg-pile' }, [
+      el('span', { class: 'rg-pile-title', text: '城堡牌堆' }),
+      el('span', { class: 'rg-pile-body' }, [
+        el('span', { class: 'rg-badge rg-badge-rank', text: `J×${c.J || 0}` }),
+        el('span', { class: 'rg-badge rg-badge-rank', text: `Q×${c.Q || 0}` }),
+        el('span', { class: 'rg-badge rg-badge-rank', text: `K×${c.K || 0}` }),
+      ]),
+    ]),
+    el('div', { class: 'rg-pile' }, [
+      el('span', { class: 'rg-pile-title', text: '酒馆牌堆' }),
+      el('span', { class: 'rg-pile-body', text: `${G.tavern} 张` }),
+    ]),
+    el('div', { class: 'rg-pile' }, [
+      el('span', { class: 'rg-pile-title', text: `弃牌堆（${discardAll.length} 张）` }),
+      el('span', { class: 'rg-pile-body' }, [
+        ...(discardAll.length > discardTop.length ? [el('span', { class: 'rg-pile-count', text: '…' })] : []),
+        ...discardTop.map((cd) => rgCardNode(cd, { mini: true })),
+        ...(discardTop.length ? [] : [el('span', { class: 'empty-hint', text: '空' })]),
+      ]),
+    ]),
+  ]));
+
+  // 战利品：已击败的敌人
+  container.appendChild(el('div', { class: 'rg-slain' }, [
+    el('span', { class: 'rg-pile-title', text: `已击败 ${G.slain.length}/12` }),
+    el('span', { class: 'rg-pile-body' },
+      G.slain.length
+        ? G.slain.map((e2) => rgCardNode(e2, { mini: true, dimmed: true }))
+        : [el('span', { class: 'empty-hint', text: '尚无战果' })]),
+  ]));
+}
+
+/** Regicide 玩家区：手牌张数、回合高亮、结算状态角标。 */
+function renderRegicidePlayers(G, ctx, playerID) {
+  const container = $('#players');
+  container.innerHTML = '';
+  container.appendChild(el('div', { class: 'section-label section-label-palette' }, [
+    el('span', { text: '玩家' }),
+    el('span', { class: 'section-label-sub', text: '合作击败全部敌人' }),
+  ]));
+  const nicknames = nicknameMap();
+  for (const id of G.playOrder) {
+    const p = G.players[id];
+    const isMe = id === playerID;
+    const isCurrent = !G.ended && id === ctx.currentPlayer;
+    const handCount = Array.isArray(p.hand) ? p.hand.length : p.hand;
+    const cls = ['territory', 'rg-player'];
+    if (isMe) cls.push('me');
+    if (isCurrent) cls.push('active');
+    // 回合状态角标文案：仅标记当前回合玩家
+    let turnText = '';
+    if (isCurrent) turnText = isMe ? '轮到你了' : '该玩家行动中';
+    const rightKids = [el('span', { class: 'rg-hand-count', text: `手牌 ${handCount}/${G.handLimit} 张` })];
+    if (G.pending && G.pending.type === 'damage' && G.pending.playerID === id) {
+      rightKids.push(el('span', { class: 'rg-badge rg-badge-damage', text: '承受伤害中' }));
+    } else if (G.pending && G.pending.type === 'chooseNext' && G.pending.playerID === id) {
+      rightKids.push(el('span', { class: 'rg-badge rg-badge-free', text: '指定下一位中' }));
+    } else if (isCurrent && handCount === 0) {
+      rightKids.push(el('span', { class: 'rg-badge rg-badge-damage', text: '空手被迫跳过' }));
+    }
+    container.appendChild(el('div', { class: cls.join(' '), 'data-turn-text': turnText }, [
+      el('div', { class: 'territory-head' }, [
+        el('span', { class: 'territory-name' }, [playerNameNode(id, nicknames, { me: isMe })]),
+        el('span', { class: 'r7-head-right' }, rightKids),
+      ]),
+      el('div', { class: 'territory-cards' }, [
+        el('span', { class: 'empty-hint', text: isCurrent ? '正在行动…' : '等待行动' }),
+      ]),
+    ]));
+  }
+}
+
+/** Regicide 手牌：连招多选；承伤结算时复用多选来挑选弃牌。 */
+function renderRegicideHand(G, playerID, isMyTurn) {
+  const container = $('#hand');
+  container.innerHTML = '';
+  // 手牌区标题：附加手牌上限提示
+  const handLabel = document.querySelector('.section-label-hand');
+  if (handLabel) {
+    handLabel.innerHTML = '';
+    handLabel.appendChild(el('span', { text: '手牌区' }));
+    handLabel.appendChild(el('span', {
+      class: 'section-label-sub', style: 'margin-left: auto;',
+      text: `手牌上限 ${G.handLimit} · 酒馆 ${G.tavern} 张`,
+    }));
+  }
+  const me = G.players[playerID];
+  if (!me || !Array.isArray(me.hand)) {
+    container.appendChild(el('div', { class: 'rg-hint', text: '等待其他玩家行动...' }));
+    return;
+  }
+  if (me.hand.length === 0) {
+    container.appendChild(el('div', {
+      class: 'rg-hint',
+      text: isMyTurn ? '手牌为空：本回合被迫跳过并承受伤害' : '手牌为空',
+    }));
+    return;
+  }
+  me.hand.forEach((card, idx) => {
+    container.appendChild(rgCardNode(card, {
+      selected: rgSelected.includes(idx),
+      onClick: isMyTurn
+        ? () => {
+            const pos = rgSelected.indexOf(idx);
+            if (pos >= 0) rgSelected.splice(pos, 1);
+            else rgSelected.push(idx);
+            renderGame(currentState);
+          }
+        : undefined,
+    }));
+  });
+}
+
+/**
+ * Regicide 行动面板：
+ * - 承伤结算（阶段 4）：多选弃牌，确认总和 ≥ 反击伤害；不足以承受时只能认败；
+ * - 小丑结算：指定下一位行动玩家；
+ * - 常规行动：连招校验 + 伤害/技能预览 + 打出 / 打出小丑 / 跳过。
+ */
+function renderRegicidePanel(state) {
+  const { G, ctx, playerID } = state;
+  const panel = $('#play-panel');
+  panel.innerHTML = '';
+
+  const forced = !G.ended && ctx.currentPlayer === playerID && !!G.pending;
+  panel.classList.toggle('rg-forced', forced);
+  if (forced && !prevRgForced) {
+    requestAnimationFrame(() => panel.scrollIntoView({ behavior: 'smooth', block: 'center' }));
+  }
+  prevRgForced = forced;
+
+  if (G.results) return;
+
+  const isMyTurn = ctx.currentPlayer === playerID;
+  const me = G.players[playerID];
+  const hand = me && Array.isArray(me.hand) ? me.hand : [];
+
+  // —— 待结算：承受伤害（阶段 4） ——
+  if (G.pending && G.pending.type === 'damage') {
+    if (G.pending.playerID !== playerID) {
+      panel.appendChild(el('div', { class: 'rg-hint', text: '该玩家正在弃牌承受伤害…' }));
+      return;
+    }
+    const amount = G.pending.amount;
+    const maxTotal = hand.reduce((s, c) => s + rgDiscardValue(c), 0);
+    panel.appendChild(el('div', {
+      class: 'rg-hint rg-hint-forced',
+      text: amount > 0
+        ? `阶段4：须弃掉数值总和 ≥ ${amount} 的手牌（A/数字按面值，J/Q/K 按 10/15/20，小丑按 0）。点击手牌选择弃牌。`
+        : '护盾完全抵挡了反击，无需弃牌，直接确认即可。',
+    }));
+    if (amount > 0 && maxTotal < amount) {
+      panel.appendChild(el('div', { class: 'rg-hint rg-hint-forced', text: `手牌数值总和最多 ${maxTotal} 点，不足以承受 ${amount} 点伤害！` }));
+      panel.appendChild(el('div', { class: 'dest-row' }, [
+        el('button', {
+          class: 'btn btn-sm rg-btn-danger',
+          text: '无力承受（全员败北）',
+          onClick: () => { client.moves.surrenderDamage(); resetRegicideSelection(); },
+        }),
+      ]));
+      return;
+    }
+    const total = rgSelected.filter((i) => i < hand.length).reduce((s, i) => s + rgDiscardValue(hand[i]), 0);
+    panel.appendChild(el('div', { class: 'rg-damage-total', text: `已选总和：${total} / 需要 ≥ ${amount}` }));
+    panel.appendChild(el('div', { class: 'dest-row' }, [
+      el('button', {
+        class: 'btn btn-sm btn-primary',
+        text: amount > 0 ? '确认弃牌承受伤害' : '确认（无伤害）',
+        disabled: total >= amount ? false : 'disabled',
+        onClick: () => { client.moves.resolveDamage([...rgSelected]); resetRegicideSelection(); },
+      }),
+    ]));
+    return;
+  }
+
+  // —— 待结算：小丑后指定下一位玩家 ——
+  if (G.pending && G.pending.type === 'chooseNext') {
+    if (G.pending.playerID !== playerID) {
+      panel.appendChild(el('div', { class: 'rg-hint', text: '该玩家正在指定下一位行动者…' }));
+      return;
+    }
+    panel.appendChild(el('div', {
+      class: 'rg-hint rg-hint-forced',
+      text: '你打出了小丑：解除当前敌人的免疫，跳过阶段 2-4（不承受反击），并指定下一位行动的玩家。',
+    }));
+    panel.appendChild(el('div', { class: 'dest-row dest-buttons' }, G.playOrder.map((id) =>
+      el('button', {
+        class: 'btn btn-sm btn-primary',
+        text: id === playerID ? `玩家 ${pLabel(id)}（你自己）` : `玩家 ${pLabel(id)}`,
+        onClick: () => { client.moves.chooseNext(id); resetRegicideSelection(); },
+      }))));
+    return;
+  }
+
+  if (!isMyTurn) {
+    panel.appendChild(el('div', { class: 'rg-hint', text: '等待其他玩家行动...' }));
+    return;
+  }
+
+  // —— 我的回合：选择行动 ——
+  const cards = rgSelected.filter((i) => i < hand.length).map((i) => hand[i]);
+  const yieldBlocked = G.lastAction === 'yield';
+  const nextDmg = G.enemy ? Math.max(0, G.enemy.attack - (G.shield || 0)) : 0;
+
+  if (cards.length === 0) {
+    const hints = ['点击选择手牌：可单出一张，或拉连招（非 A 同点数、总和 ≤ 10）。'];
+    if (yieldBlocked) hints.push('上一位玩家刚跳过，本回合不能再跳过。');
+    panel.appendChild(el('div', { class: 'rg-hint', text: hints.join(' ') }));
+    if (!yieldBlocked) {
+      panel.appendChild(el('div', { class: 'dest-row' }, [
+        el('button', {
+          class: 'btn btn-sm',
+          text: `跳过（直接承受 ${nextDmg} 点伤害）`,
+          onClick: () => { client.moves.yieldTurn(); resetRegicideSelection(); },
+        }),
+      ]));
+    }
+    return;
+  }
+
+  // 校验所选牌构成合法行动（Boss 牌按承伤计值 J=10/Q=15/K=20）
+  const jokers = cards.filter((c) => c.isJoker);
+  const nonA = cards.filter((c) => !c.isJoker && c.rank !== 'A');
+  const totalValue = cards.reduce((s, c) => s + (c.isJoker ? 0 : rgDiscardValue(c)), 0);
+  let mode = 'invalid'; // 'play' | 'joker' | 'invalid'
+  if (jokers.length > 0) {
+    mode = cards.length === 1 ? 'joker' : 'invalid';
+  } else if (cards.length === 1) {
+    mode = 'play';
+  } else if (nonA.length === 0 || nonA.every((c) => rgDiscardValue(c) === rgDiscardValue(nonA[0]))) {
+    mode = totalValue <= 10 ? 'play' : 'invalid';
+  }
+
+  // 行动预览 tip（免疫花色：伤害计入但技能不发动，从触发列表排除）
+  const suitAbilities = { heart: '♥治疗', diamond: '♦抽牌', club: '♣双倍伤害', spade: '♠护盾' };
+  const immuneSuit = G.enemy && !G.jokerUsed ? G.enemy.suit : null;
+  const totalPlayed = cards.filter((c) => !c.isJoker).reduce((s, c) => s + rgDiscardValue(c), 0);
+  const abilities = [...new Set(cards.filter((c) => !c.isJoker && c.suit !== immuneSuit).map((c) => c.suit))]
+    .map((s) => {
+      const name = suitAbilities[s];
+      return s === 'club' ? name : `${name} ${totalPlayed}`;
+    }).join('、');
+  const immuneBlocked = immuneSuit && cards.some((c) => !c.isJoker && c.suit === immuneSuit);
+  const preview = rgPreviewDamage(G, cards);
+
+  const lines = [];
+  if (mode === 'invalid') {
+    lines.push(el('div', {
+      class: 'rg-hint rg-hint-forced',
+      text: jokers.length > 0 ? '小丑只能单独打出。' : '连招无效：非 A 牌须同点数，且总点数 ≤ 10。',
+    }));
+  } else if (mode === 'joker') {
+    lines.push(el('div', { class: 'rg-preview-line rg-preview-fx', text: '解除当前敌人的免疫，跳过阶段 2-4，指定下一位玩家。' }));
+  } else {
+    lines.push(el('div', {
+      class: 'rg-preview-line',
+      text: `预计伤害：${preview}${immuneBlocked ? `（${G.enemy.suitName}免疫，同花色牌技能不发动）` : ''}`,
+    }));
+    if (abilities) lines.push(el('div', { class: 'rg-preview-line rg-preview-fx', text: `触发技能：${abilities}` }));
+  }
+  panel.appendChild(el('div', { class: 'rg-tip' }, [
+    el('div', { class: 'rg-tip-head', text: '行动预览' }),
+    el('div', { class: 'rg-tip-body' }, [
+      el('div', { class: 'rg-preview-line', text: `已选：${cards.map(rgCardLabel).join(' + ')}` }),
+      ...lines,
+    ]),
+  ]));
+
+  // 操作按钮
+  panel.appendChild(el('div', { class: 'dest-row' }, [
+    mode === 'play'
+      ? el('button', {
+          class: 'btn btn-sm btn-primary',
+          text: `打出 ${cards.length} 张牌`,
+          onClick: () => { client.moves.playCards([...rgSelected]); resetRegicideSelection(); },
+        })
+      : null,
+    mode === 'joker'
+      ? el('button', {
+          class: 'btn btn-sm btn-primary',
+          text: '打出小丑',
+          onClick: () => { client.moves.playJoker(rgSelected[0]); resetRegicideSelection(); },
+        })
+      : null,
+    !yieldBlocked
+      ? el('button', {
+          class: 'btn btn-sm',
+          text: `跳过（承受 ${nextDmg} 点）`,
+          onClick: () => { client.moves.yieldTurn(); resetRegicideSelection(); },
+        })
+      : null,
+  ].filter(Boolean)));
+}
+
+/** Regicide 结算：合作胜利 / 全员败北。 */
+function renderRegicideGameover(G) {
+  const box = $('#gameover');
+  if (!G.results) {
+    box.style.display = 'none';
+    box.innerHTML = '';
+    return;
+  }
+  box.style.display = 'block';
+  box.innerHTML = '';
+  const win = !G.results.lost;
+  box.appendChild(el('h2', { text: win ? '🏆 王座已定，玩家们胜利！' : '💀 全员败北' }));
+  box.appendChild(el('p', { class: 'go-summary', text: G.results.reason }));
+  box.appendChild(el('p', { class: 'go-summary', text: `本次共击败 ${G.slain.length}/12 个敌人。` }));
+  box.appendChild(backToLobbyButton());
+}
+
+/** Regicide 统一渲染。 */
+function renderRegicide(state) {
+  if (!state) return;
+  currentState = state;
+  const { G, ctx, playerID } = state;
+  const taskPanel = $('#task-panel');
+  if (taskPanel) taskPanel.style.display = 'none';
+  renderRegicideTable(G, playerID);
+  renderRegicidePlayers(G, ctx, playerID);
+  renderRegicideHand(G, playerID, !G.ended && ctx.currentPlayer === playerID);
+  renderRegicidePanel(state);
+  renderLog(G);
+  renderRegicideGameover(G);
 }
 
 // ---------- 渲染分发 ----------
@@ -1172,6 +1623,7 @@ function renderRed7(state) {
 const GAME_RENDERERS = {
   [QuancGame.name]: renderQuanc,
   [Red7Game.name]: renderRed7,
+  [RegicideGame.name]: renderRegicide,
 };
 
 // ---------- 卡牌飞行动画（FLIP：First / Last / Invert / Play） ----------
@@ -1203,17 +1655,26 @@ function quancCardLocations(G) {
   return map;
 }
 
-/** 摸牌飞入动画的起点锚点：手牌区上方（牌堆方向），退回 header 牌堆信息。 */
+/** Regicide：提取每张牌当前的逻辑位置（playerView 后仅自己手牌为数组）。 */
+function regicideCardLocations(G) {
+  const map = new Map();
+  for (const id of Object.keys(G.players || {})) {
+    const p = G.players[id];
+    if (Array.isArray(p.hand)) for (const c of p.hand) map.set(c.id, 'hand');
+  }
+  if (Array.isArray(G.discard)) for (const c of G.discard) map.set(c.id, 'discard');
+  if (G.enemy) map.set(G.enemy.id, 'enemy');
+  if (Array.isArray(G.slain)) for (const c of G.slain) map.set(c.id, 'slain');
+  // 城堡 / 酒馆不在界面上逐张渲染，不纳入位置映射
+  return map;
+}
+
+/** 摸牌飞入动画的起点锚点：手牌区上方（牌堆方向），无手牌区时退回视口顶部中央。 */
 function deckAnchorRect() {
   const hand = $('#hand');
   if (hand) {
     const r = hand.getBoundingClientRect();
     return { left: r.left + r.width / 2, top: r.top - 24 };
-  }
-  const info = $('#deck-info');
-  if (info) {
-    const r = info.getBoundingClientRect();
-    return { left: r.left + r.width / 2, top: r.top };
   }
   return { left: window.innerWidth / 2, top: 0 };
 }
@@ -1225,7 +1686,11 @@ function renderGame(state) {
   if (!fn) return;
 
   const G = state.G || {};
-  const locFn = currentGame.game.name === Red7Game.name ? red7CardLocations : quancCardLocations;
+  const locFns = {
+    [Red7Game.name]: red7CardLocations,
+    [RegicideGame.name]: regicideCardLocations,
+  };
+  const locFn = (currentGame && locFns[currentGame.game.name]) || quancCardLocations;
   const currLocs = locFn(G);
   const firstRender = prevCardLocations.size === 0;
 
@@ -1606,6 +2071,7 @@ function showGameScreen() {
   if (!inGameScreen) {
     inGameScreen = true;
     resetRed7Selection();
+    resetRegicideSelection();
     mountGameTemplate(currentGame);
     $('#library').style.display = 'none';
     $('#setup').style.display = 'none';
@@ -1685,6 +2151,7 @@ function resetToLibrary(message) {
   currentState = null;
   currentGame = null;
   resetRed7Selection();
+  resetRegicideSelection();
   seenCardIds.clear();
   prevEnded = false;
   justEnded = false;
@@ -1699,7 +2166,6 @@ function resetToLibrary(message) {
     if (node) node.innerHTML = '';
   }
   $('#gameover').style.display = 'none';
-  $('#deck-info').textContent = '';
   $('#match-id').textContent = '-';
   $('#copy-match-btn').textContent = '复制';
   $('#room-copy-btn').textContent = '复制邀请';

@@ -13,6 +13,7 @@
 
 import { QuancGame } from './quanc.js';
 import { Red7Game } from './red7.js';
+import { RegicideGame } from './regicide.js';
 
 export const GAMES = [
   {
@@ -34,6 +35,16 @@ export const GAMES = [
     game: Red7Game,
     css: 'css/red7.css',
     template: 'template-red7',
+  },
+  {
+    title: 'Regicide',
+    tagline: '2-4 人 · 合作 · 攻城弑君',
+    description: '齐心击败 12 位敌人（4 J → 4 Q → 4 K）：用花色连招治疗、抽牌、护盾与双倍伤害，抵御反击并弑王。',
+    icon: '👑',
+    color: '#8e6cc9',
+    game: RegicideGame,
+    css: 'css/regicide.css',
+    template: 'template-regicide',
   },
 ];
 

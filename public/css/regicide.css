@@ -1,0 +1,238 @@
+/* ========== Regicide 卡牌 ========== */
+.rg-card {
+  --c: #888;
+  width: var(--card-w); height: var(--card-h);
+  border-radius: 12px;
+  position: relative;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 2px;
+  background:
+    radial-gradient(120% 80% at 30% 18%, rgba(255,255,255,0.30), transparent 55%),
+    linear-gradient(160deg,
+      color-mix(in srgb, var(--c) 82%, #fff 16%) 0%,
+      var(--c) 40%,
+      color-mix(in srgb, var(--c) 55%, #000 42%) 100%);
+  border: 1px solid rgba(255,255,255,0.30);
+  box-shadow:
+    0 8px 18px rgba(0,0,0,0.5),
+    0 2px 5px rgba(0,0,0,0.4),
+    0 0 0 1px color-mix(in srgb, var(--c) 45%, transparent);
+  color: #fff; cursor: pointer; user-select: none;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.rg-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 14px 26px rgba(0,0,0,0.55), 0 0 0 2px rgba(255,255,255,0.4);
+}
+.rg-num {
+  font-size: 40px; font-weight: 800; line-height: 1;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.55);
+}
+.rg-suit {
+  font-size: 14px; font-weight: 700; opacity: 0.95;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.55);
+}
+.rg-card-selected {
+  transform: translateY(-8px);
+  box-shadow:
+    0 0 0 3px #ffd966,
+    0 0 22px rgba(255,217,102,0.6),
+    0 12px 24px rgba(0,0,0,0.55);
+}
+.rg-card-dimmed { opacity: 0.5; filter: grayscale(0.4); }
+.rg-card-mini {
+  width: var(--mini-w); height: var(--mini-h);
+  border-radius: 7px;
+}
+.rg-card-mini .rg-num { font-size: 24px; }
+.rg-card-mini .rg-suit { font-size: 11px; font-weight: 600; }
+.rg-card-mini:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 16px rgba(0,0,0,0.5), 0 0 0 2px rgba(255,255,255,0.35);
+}
+/* 静态卡牌（无 onClick）：禁用 hover 交互反馈 */
+.rg-card-static { cursor: default; }
+.rg-card-static:hover {
+  transform: none;
+  box-shadow:
+    0 8px 18px rgba(0,0,0,0.5),
+    0 2px 5px rgba(0,0,0,0.4),
+    0 0 0 1px color-mix(in srgb, var(--c) 45%, transparent);
+}
+/* 小丑牌：紫底特殊观感 */
+.rg-card-joker {
+  background:
+    radial-gradient(120% 80% at 30% 18%, rgba(255,255,255,0.30), transparent 55%),
+    linear-gradient(160deg, #8e6cc9 0%, #5e4b9e 60%, #3a2f66 100%);
+}
+
+/* ========== Regicide 战场：当前敌人 ========== */
+.rg-enemy {
+  --c: #e53935;
+  display: flex; align-items: center; gap: 16px;
+  background: rgba(0,0,0,0.25);
+  border: 1px solid color-mix(in srgb, var(--c) 60%, transparent);
+  border-radius: 12px; padding: 12px 16px;
+}
+.rg-enemy-stats { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.rg-enemy-name { font-size: 18px; font-weight: 800; color: #fff; }
+.rg-enemy-line { font-size: 13px; opacity: 0.9; }
+.rg-hpbar {
+  width: 220px; max-width: 100%; height: 10px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.12);
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.2);
+}
+.rg-hp-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #ff8a80, #e53935);
+  transition: width 0.4s ease;
+}
+.rg-enemy-badges { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* ========== Regicide 徽章 ========== */
+.rg-badge {
+  font-size: 11px; font-weight: 700; line-height: 1.4;
+  padding: 1px 8px; border-radius: 999px;
+  background: rgba(255,255,255,0.1); color: #ccc;
+  display: inline-block;
+}
+.rg-badge-immune { background: rgba(229,57,53,0.25); color: #ff8a80; }
+.rg-badge-free { background: rgba(142,108,201,0.3); color: #d1b3ff; }
+.rg-badge-shield { background: rgba(92,107,192,0.3); color: #aab6ff; }
+.rg-badge-rank { background: rgba(255,255,255,0.08); color: #f5d67b; }
+.rg-badge-damage { background: rgba(255,82,82,0.28); color: #ff8a80; }
+/* 「将触发」：金色高亮，与行动预览的触发技能提示一致 */
+.rg-badge-active { background: rgba(255,217,102,0.22); color: #ffe082; }
+.rg-hand-count { font-size: 12px; font-weight: 600; color: #ffd966; }
+
+/* ========== Regicide 花色技能看板 ========== */
+.rg-suits {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+.rg-suit-item {
+  --c: #888;
+  display: flex; align-items: center; gap: 8px;
+  background: rgba(0,0,0,0.18);
+  border: 1px solid color-mix(in srgb, var(--c) 50%, transparent);
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+.rg-suit-symbol {
+  font-size: 22px; font-weight: 800; line-height: 1;
+  color: var(--c);
+  text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+}
+.rg-suit-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.rg-suit-name { font-size: 13px; font-weight: 700; color: #fff; }
+.rg-suit-desc { font-size: 11px; opacity: 0.65; }
+.rg-suit-badges { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; }
+
+/* ========== Regicide 牌堆信息 / 战利品 ========== */
+.rg-piles { display: flex; gap: 14px; flex-wrap: wrap; }
+.rg-pile {
+  display: flex; flex-direction: column; gap: 4px;
+  background: rgba(0,0,0,0.18);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px;
+  padding: 8px 12px;
+}
+.rg-pile-title { font-size: 12px; font-weight: 700; opacity: 0.75; }
+.rg-pile-body { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 13px; }
+.rg-pile-count { font-size: 12px; opacity: 0.7; }
+.rg-slain {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+
+/* ========== Regicide 提示 / 行动面板 ========== */
+.rg-hint { font-size: 15px; opacity: 0.85; line-height: 1.5; }
+.rg-hint-forced { color: #ff8a80; font-weight: 700; opacity: 1; }
+.rg-preview-line { font-size: 13px; line-height: 1.55; opacity: 0.92; }
+/* 触发花色技能：醒目金色样式 + ⚡ 前缀 + 脉冲外发光 */
+.rg-preview-fx {
+  position: relative;
+  color: #ffe082;
+  font-weight: 700;
+  background: rgba(255, 217, 102, 0.12);
+  border-left: 3px solid #ffd966;
+  padding: 3px 8px;
+  border-radius: 0 6px 6px 0;
+}
+.rg-preview-fx::before { content: '⚡ '; }
+/* 脉冲发光：阴影固定在伪元素上，仅动画 opacity（合成器处理，不逐帧重绘） */
+.rg-preview-fx::after {
+  content: '';
+  position: absolute; inset: 0;
+  border-radius: inherit;
+  box-shadow: 0 0 10px 2px rgba(255, 217, 102, 0.55);
+  animation: rg-glow-pulse 1.6s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes rg-glow-pulse {
+  0%, 100% { opacity: 0.25; }
+  50% { opacity: 1; }
+}
+
+/* 承伤结算：已选数值合计行 */
+.rg-damage-total {
+  font-size: 15px; font-weight: 800; color: #ffd966;
+}
+.rg-btn-danger { background: #8a3030; color: #ffd7d7; font-weight: 700; }
+.rg-btn-danger:hover { background: #a03a3a; }
+
+/* 强制行动（承伤 / 选下一位）：面板红色脉冲强调 */
+.play-panel.rg-forced {
+  position: relative;
+  border: 2px solid #ff5252;
+  border-radius: 12px;
+  padding: 10px;
+  background: rgba(229,57,53,0.08);
+}
+.play-panel.rg-forced::before {
+  content: '';
+  position: absolute; inset: 0;
+  border-radius: inherit;
+  box-shadow: 0 0 18px 3px rgba(255,82,82,0.55);
+  animation: rg-glow-pulse 1.2s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* ========== Regicide 行动预览 tip ========== */
+.rg-tip {
+  border-radius: 10px; overflow: hidden;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.14);
+}
+.rg-tip-head {
+  padding: 7px 12px;
+  font-size: 14px; font-weight: 800; letter-spacing: 2px; color: #f5d67b;
+  background: rgba(0,0,0,0.25);
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.rg-tip-body { display: flex; flex-direction: column; gap: 4px; padding: 9px 12px; }
+
+/* ========== Regicide 响应式 / 无障碍 ========== */
+@media (max-width: 480px) {
+  .rg-num { font-size: 30px; }
+  .rg-suit { font-size: 11px; }
+  .rg-enemy { gap: 10px; padding: 10px 12px; }
+  .rg-hpbar { width: 160px; }
+  .rg-suits { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* 触屏设备：取消悬停位移 */
+@media (hover: none) {
+  .rg-card:hover { transform: none; }
+  .rg-card-mini:hover { transform: none; }
+  .rg-card-static:hover { transform: none; }
+}
+
+/* 系统偏好「减少动态效果」时停用脉冲动画 */
+@media (prefers-reduced-motion: reduce) {
+  .rg-preview-fx::after { animation: none; opacity: 0.6; }
+  .play-panel.rg-forced::before { animation: none; opacity: 0.8; }
+}
