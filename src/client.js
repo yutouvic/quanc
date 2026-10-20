@@ -31,7 +31,7 @@ let prevEnded = false;       // 上一帧是否已结束（用于一次性触发
 let justEnded = false;       // 本帧是否为游戏结束瞬间
 let prevCardLocations = new Map(); // 上一帧的「卡牌 id → 逻辑位置」映射，用于 diff 出移动/新增/消失以播放飞行动画
 const loadedCSS = new Set(); // 已动态加载的游戏 CSS 路径（去重）
-const CSS_VERSION = '20';     // CSS 版本号：样式更新时递增，防止浏览器缓存旧样式
+const CSS_VERSION = '22';     // CSS 版本号：样式更新时递增，防止浏览器缓存旧样式
 let rgSelected = [];         // Regicide 手牌多选索引（连招 / 承伤弃牌共用）
 let prevRgForced = false;    // Regicide 上一帧是否处于强制结算（用于自动定位只触发一次）
 
@@ -403,6 +403,13 @@ function renderTable(G, fates) {
 function renderHand(G, playerID, active) {
   const container = $('#hand');
   container.innerHTML = '';
+  // 手牌区标题右侧小字：摸牌堆剩余张数
+  const handLabel = document.querySelector('.section-label-hand');
+  if (handLabel) {
+    handLabel.innerHTML = '';
+    handLabel.appendChild(el('span', { text: '手牌区' }));
+    handLabel.appendChild(el('span', { class: 'section-label-sub', style: 'margin-left: auto;', text: `摸牌堆 ${G.deck} 张` }));
+  }
   const me = G.players[playerID];
   if (!me || !Array.isArray(me.hand)) {
     container.appendChild(el('div', { class: 'empty-hint', text: '等待其他玩家行动...' }));

@@ -12,7 +12,7 @@ body {
   background:
     radial-gradient(120% 90% at 50% -10%, rgba(212,160,23,0.10), transparent 55%),
     radial-gradient(90% 70% at 100% 110%, rgba(30,90,70,0.35), transparent 60%),
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='0.4'/%3E%3C/svg%3E"),
     linear-gradient(135deg, #0a1712 0%, #0e2a20 100%);
   color: #f2ead8;
   min-height: 100vh;

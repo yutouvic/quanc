@@ -174,13 +174,13 @@
 
 /* 中间共享家族计分板 */
 .board-head-cell {
-  display: flex; flex-direction: column; align-items: center; gap: 1px;
+  display: flex; flex-direction: column; align-items: center; gap: 0;
   padding: 5px 2px 6px;
   border-radius: 8px; border: 1px solid color-mix(in srgb, var(--c) 60%, transparent);
   background: color-mix(in srgb, var(--c) 14%, transparent);
 }
-.board-head-cell .chip-icon { font-size: 20px; }
-.board-head-name { font-size: 12px; font-weight: 700; }
+.board-head-cell .chip-icon { font-size: 28px; }
+.board-head-name { font-size: 12px; font-weight: 700; line-height: 1.2; }
 .board-head-cell .fate-badge { font-size: 10px; }
 .board-head-cell.fate-neutral { opacity: 0.8; }
 .board-head-spy {
@@ -284,7 +284,7 @@
   .board-side { width: 14px; }
   .board-side span { font-size: 10px; letter-spacing: 1px; }
   .board-col { padding: 2px; gap: 2px; min-height: 50px; }
-  .board-head-cell .chip-icon { font-size: 16px; }
+  .board-head-cell .chip-icon { font-size: 22px; }
 
   .task-panel { gap: 6px; margin-bottom: 8px; }
   .territory-score { font-size: 11px; }

@@ -19,7 +19,7 @@ export const GAMES = [
   {
     title: 'Quanc',
     tagline: '2-5 人 · 回合制 · 卡牌博弈',
-    description: '六大家族争夺餐桌与领地：间谍潜伏、刺客暗算、贵族权重、任务暗中角力。',
+    description: '六大家族争名逐利，是扶持，是制衡，还是压制？间谍潜伏、刺客暗算、贵族权重，阴谋一触即发。',
     icon: '🦁',
     color: '#d6c01bff',
     game: QuancGame,
@@ -29,7 +29,7 @@ export const GAMES = [
   {
     title: 'Red7',
     tagline: '2-4 人 · 规则瞬息万变 · 卡牌博弈',
-    description: '拥有最好的调色盘。改变颜色规则，回合结束非优胜者淘汰，坚持到最后。',
+    description: '计划不如变化快。7个点数、7种颜色，规则组合千变万化。淘汰你的对手，坚持到最后。',
     icon: '🔴',
     color: '#e53935',
     game: Red7Game,
@@ -38,8 +38,8 @@ export const GAMES = [
   },
   {
     title: 'Regicide',
-    tagline: '2-4 人 · 合作 · 攻城弑君',
-    description: '齐心击败 12 位敌人（4 J → 4 Q → 4 K）：用花色连招治疗、抽牌、护盾与双倍伤害，抵御反击并弑王。',
+    tagline: '2-4 人 · 合作游戏 · 击败魔王',
+    description: '全体玩家合力齐心击败 12 位敌人，巧妙运用花色和组合，抵御魔王的进攻，不能丢下任何一个队友，否则你们就会落败。',
     icon: '👑',
     color: '#8e6cc9',
     game: RegicideGame,
