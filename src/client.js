@@ -31,7 +31,7 @@ let prevEnded = false;       // 上一帧是否已结束（用于一次性触发
 let justEnded = false;       // 本帧是否为游戏结束瞬间
 let prevCardLocations = new Map(); // 上一帧的「卡牌 id → 逻辑位置」映射，用于 diff 出移动/新增/消失以播放飞行动画
 const loadedCSS = new Set(); // 已动态加载的游戏 CSS 路径（去重）
-const CSS_VERSION = '22';     // CSS 版本号：样式更新时递增，防止浏览器缓存旧样式
+const CSS_VERSION = '23';     // CSS 版本号：样式更新时递增，防止浏览器缓存旧样式
 let rgSelected = [];         // Regicide 手牌多选索引（连招 / 承伤弃牌共用）
 let prevRgForced = false;    // Regicide 上一帧是否处于强制结算（用于自动定位只触发一次）
 
@@ -765,6 +765,11 @@ function renderRed7RuleArea(G) {
     })),
   ]));
 
+  // 比较规则提示：点数 7 最大 1 最小，点数相等则按颜色红>橙>黄>绿>青>蓝>紫。
+  container.appendChild(el('div', { class: 'r7-rule-hint' }, [
+    el('span', { text: '比较卡牌：点数 7 最大、1 最小；点数相等则比颜色，红最大、紫最小。' }),
+  ]));
+
   // 画布区弃牌堆（无独立标题，间距收紧）；仅最上方一张为当前生效规则牌，其余历史牌弱化
   container.appendChild(el('div', { class: 'r7-canvas' }, [
     G.canvas.length === 0
@@ -1393,9 +1398,12 @@ function renderRegicideHand(G, playerID, isMyTurn) {
     }));
     return;
   }
+  // 当前敌人的免疫花色（小丑已用则解除）：该花色手牌置灰
+  const immuneSuit = G.enemy && !G.jokerUsed ? G.enemy.suit : null;
   me.hand.forEach((card, idx) => {
     container.appendChild(rgCardNode(card, {
       selected: rgSelected.includes(idx),
+      dimmed: immuneSuit && !card.isJoker && card.suit === immuneSuit,
       onClick: isMyTurn
         ? () => {
             const pos = rgSelected.indexOf(idx);
@@ -1500,7 +1508,7 @@ function renderRegicidePanel(state) {
   const nextDmg = G.enemy ? Math.max(0, G.enemy.attack - (G.shield || 0)) : 0;
 
   if (cards.length === 0) {
-    const hints = ['点击选择手牌：可单出一张，或拉连招（非 A 同点数、总和 ≤ 10）。'];
+    const hints = ['点击选择手牌：可单出、连招（同点数且总和 ≤ 10）或宠物协同（A 配任意牌）。'];
     if (yieldBlocked) hints.push('上一位玩家刚跳过，本回合不能再跳过。');
     panel.appendChild(el('div', { class: 'rg-hint', text: hints.join(' ') }));
     if (!yieldBlocked) {
@@ -1517,16 +1525,31 @@ function renderRegicidePanel(state) {
 
   // 校验所选牌构成合法行动（Boss 牌按承伤计值 J=10/Q=15/K=20）
   const jokers = cards.filter((c) => c.isJoker);
+  const hasA = cards.some((c) => !c.isJoker && c.rank === 'A');
   const nonA = cards.filter((c) => !c.isJoker && c.rank !== 'A');
   const totalValue = cards.reduce((s, c) => s + (c.isJoker ? 0 : rgDiscardValue(c)), 0);
+  const nonASame = nonA.length === 0 || nonA.every((c) => rgDiscardValue(c) === rgDiscardValue(nonA[0]));
   let mode = 'invalid'; // 'play' | 'joker' | 'invalid'
+  let comboType = null;  // 'single' | 'combo' | 'pet' | 'joker'
   if (jokers.length > 0) {
-    mode = cards.length === 1 ? 'joker' : 'invalid';
+    if (cards.length === 1) { mode = 'joker'; comboType = 'joker'; }
   } else if (cards.length === 1) {
-    mode = 'play';
-  } else if (nonA.length === 0 || nonA.every((c) => rgDiscardValue(c) === rgDiscardValue(nonA[0]))) {
-    mode = totalValue <= 10 ? 'play' : 'invalid';
+    mode = 'play'; comboType = 'single';
+  } else if (hasA) {
+    // 宠物协同：A 可与任意非小丑牌合出，无同点数 / 总点数限制
+    mode = 'play'; comboType = 'pet';
+  } else if (nonASame && totalValue <= 10) {
+    mode = 'play'; comboType = 'combo';
   }
+
+  // 组合类型说明（宠物协同 / 连招 / 无效组合）
+  const comboHint = {
+    single: '单出一张牌。',
+    combo: `连招：点数相同且总点数 ≤ 10（当前 ${nonA.length > 0 ? rgDiscardValue(nonA[0]) : '—'} 点 × ${nonA.length}，合计 ${totalValue}）。`,
+    pet: `宠物协同：A 可与任意非小丑牌合出，A 计 1 点，无总点数限制（合计 ${totalValue}）。`,
+    joker: null,
+    invalid: null,
+  }[comboType] || null;
 
   // 行动预览 tip（免疫花色：伤害计入但技能不发动，从触发列表排除）
   const suitAbilities = { heart: '♥治疗', diamond: '♦抽牌', club: '♣双倍伤害', spade: '♠护盾' };
@@ -1542,13 +1565,25 @@ function renderRegicidePanel(state) {
 
   const lines = [];
   if (mode === 'invalid') {
+    const reason = jokers.length > 0
+      ? '小丑只能单独打出。'
+      : !nonASame
+        ? '连招无效：点数需相同。'
+        : '连招无效：总点数超过 10。';
+    lines.push(el('div', { class: 'rg-hint rg-hint-forced', text: `无效组合：${reason}` }));
     lines.push(el('div', {
-      class: 'rg-hint rg-hint-forced',
-      text: jokers.length > 0 ? '小丑只能单独打出。' : '连招无效：非 A 牌须同点数，且总点数 ≤ 10。',
+      class: 'rg-preview-line',
+      text: '合法组合：① 单出任意 1 张；② 连招 = 点数相同且总点数 ≤ 10；③ 宠物协同 = A（计 1 点）可与任意非小丑牌合出，无总点数限制；④ 小丑单独打出。',
     }));
   } else if (mode === 'joker') {
     lines.push(el('div', { class: 'rg-preview-line rg-preview-fx', text: '解除当前敌人的免疫，跳过阶段 2-4，指定下一位玩家。' }));
   } else {
+    if (comboType === 'pet') {
+      lines.push(el('div', { class: 'rg-preview-line rg-preview-fx', text: '宠物协同' }));
+    } else if (comboType === 'combo') {
+      lines.push(el('div', { class: 'rg-preview-line rg-preview-fx', text: '连招' }));
+    }
+    if (comboHint) lines.push(el('div', { class: 'rg-preview-line', text: comboHint }));
     lines.push(el('div', {
       class: 'rg-preview-line',
       text: `预计伤害：${preview}${immuneBlocked ? `（${G.enemy.suitName}免疫，同花色牌技能不发动）` : ''}`,

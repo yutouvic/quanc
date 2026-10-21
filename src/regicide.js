@@ -369,17 +369,23 @@ export const RegicideGame = {
         const cards = sorted.map((i) => p.hand[i]);
         if (cards.some((c) => c.isJoker)) return INVALID_MOVE; // 小丑走 playJoker
         if (cards.length > 1) {
-          const nonA = cards.filter((c) => c.rank !== 'A');
-          if (nonA.length > 0 && nonA.some((c) => rgDiscardValue(c) !== rgDiscardValue(nonA[0]))) return INVALID_MOVE;
-          const total = cards.reduce((s, c) => s + rgDiscardValue(c), 0);
-          if (total > 10) return INVALID_MOVE;
+          const hasA = cards.some((c) => c.rank === 'A');
+          // 宠物协同（含 A）：可与任意非小丑牌合出，无同点数/总点数限制
+          // 连招（无 A）：非 A 牌须同点数，且总点数 ≤ 10
+          if (!hasA) {
+            const nonA = cards.filter((c) => c.rank !== 'A');
+            if (nonA.some((c) => rgDiscardValue(c) !== rgDiscardValue(nonA[0]))) return INVALID_MOVE;
+            const total = cards.reduce((s, c) => s + rgDiscardValue(c), 0);
+            if (total > 10) return INVALID_MOVE;
+          }
         }
 
         // 从手牌移除（按降序索引 splice）
         const taken = takeCards(p, [...sorted].reverse());
+        const hasA = taken.some((c) => c.rank === 'A');
         G.lastAction = 'play';
         G.log.push(
-          `玩家 ${pLabel(playerID)} 打出 ${taken.map(describeCard).join(' + ')}${taken.length > 1 ? '（连招）' : ''}。`,
+          `玩家 ${pLabel(playerID)} 打出 ${taken.map(describeCard).join(' + ')}${taken.length > 1 ? (hasA ? '（宠物协同）' : '（连招）') : ''}。`,
         );
 
         // —— 阶段 2：花色技能（免疫只挡技能，不挡伤害） ——

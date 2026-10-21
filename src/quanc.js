@@ -205,8 +205,8 @@ export const TABLE_TASKS = [
   {
     id: 'some-5-disfavored',
     name: '众矢之的',
-    desc: '某个家族在失宠区至少有 5 张牌',
-    check: (G) => FAMILIES.some((f) => countFamily(G.table.disfavored, f.id) >= 5),
+    desc: '某个家族在失宠区至少有 3 张牌',
+    check: (G) => FAMILIES.some((f) => countFamily(G.table.disfavored, f.id) >= 3),
   },
   {
     id: 'each-1-disfavored',

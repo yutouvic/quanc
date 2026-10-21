@@ -157,6 +157,14 @@
 .r7-canvas { margin-top: 4px; }
 .r7-canvas-cards { display: flex; flex-wrap: wrap; gap: 6px; }
 
+/* 规则一览下方的比较规则提示 */
+.r7-rule-hint {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: rgba(242, 234, 216, 0.62);
+}
+
 /* ========== Red7 手牌区提示（字号调大） ========== */
 .r7-hint { font-size: 15px; opacity: 0.85; line-height: 1.5; }
 .r7-hint-forced { color: #ff8a80; font-weight: 700; opacity: 1; }
