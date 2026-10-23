@@ -23,7 +23,7 @@ export const FAMILIES = [
   { id: 'lion', name: '狮族', icon: '🦁', iconSvg: FAMILY_ICONS.lion, color: '#d6c01bff' },
   { id: 'eagle', name: '鹰族', icon: '🦅', iconSvg: FAMILY_ICONS.eagle, color: '#3b72c5ff' },
   { id: 'wolf', name: '狼族', icon: '🐺', iconSvg: FAMILY_ICONS.wolf, color: '#9aa4b2' },
-  { id: 'serpent', name: '蛇族', icon: '🐍', iconSvg: FAMILY_ICONS.serpent, color: '#c2185b' },
+  { id: 'serpent', name: '蛇族', icon: '🐍', iconSvg: FAMILY_ICONS.serpent, color: '#d22369ff' },
   { id: 'stag', name: '鹿族', icon: '🦌', iconSvg: FAMILY_ICONS.stag, color: '#4caf50' },
   { id: 'bear', name: '熊族', icon: '🐻', iconSvg: FAMILY_ICONS.bear, color: '#8d5524' },
 ];

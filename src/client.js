@@ -31,7 +31,7 @@ let prevEnded = false;       // 上一帧是否已结束（用于一次性触发
 let justEnded = false;       // 本帧是否为游戏结束瞬间
 let prevCardLocations = new Map(); // 上一帧的「卡牌 id → 逻辑位置」映射，用于 diff 出移动/新增/消失以播放飞行动画
 const loadedCSS = new Set(); // 已动态加载的游戏 CSS 路径（去重）
-const CSS_VERSION = '23';     // CSS 版本号：样式更新时递增，防止浏览器缓存旧样式
+const CSS_VERSION = '25';     // CSS 版本号：样式更新时递增，防止浏览器缓存旧样式
 let rgSelected = [];         // Regicide 手牌多选索引（连招 / 承伤弃牌共用）
 let prevRgForced = false;    // Regicide 上一帧是否处于强制结算（用于自动定位只触发一次）
 
@@ -480,10 +480,14 @@ function renderPlayPanel(state) {
   const isActive = !G.results && ctx.currentPlayer === playerID;
   const panel = $('#play-panel');
 
+  // 刺客待结算属于强制操作：复用全局红色脉冲边框强调
+  const forced = isActive && !!G.pendingAssassin;
+  panel.classList.toggle('panel-forced', forced);
+
   if (G.results) return;
 
   // 有待结算的刺客效果，且仅当前操作玩家可见并结算；其他玩家仅提示等待
-  if (G.pendingAssassin && isActive) {
+  if (forced) {
     renderAssassinPanel(state);
     return;
   }
@@ -1061,7 +1065,7 @@ function renderRed7PlayPanel(state) {
 
   // 强制行动（打出 5 须续打 / 打出 1、7 待结算）：面板脉冲强调，并在出现时自动滚动定位
   const forced = !G.ended && ctx.currentPlayer === playerID && !!(G.pending || G.mustPlay);
-  panel.classList.toggle('r7-forced', forced);
+  panel.classList.toggle('panel-forced', forced);
   if (forced && !prevForcedAction) {
     requestAnimationFrame(() => panel.scrollIntoView({ behavior: 'smooth', block: 'center' }));
   }
@@ -1428,7 +1432,7 @@ function renderRegicidePanel(state) {
   panel.innerHTML = '';
 
   const forced = !G.ended && ctx.currentPlayer === playerID && !!G.pending;
-  panel.classList.toggle('rg-forced', forced);
+  panel.classList.toggle('panel-forced', forced);
   if (forced && !prevRgForced) {
     requestAnimationFrame(() => panel.scrollIntoView({ behavior: 'smooth', block: 'center' }));
   }

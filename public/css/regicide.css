@@ -184,23 +184,6 @@
 .rg-btn-danger { background: #8a3030; color: #ffd7d7; font-weight: 700; }
 .rg-btn-danger:hover { background: #a03a3a; }
 
-/* 强制行动（承伤 / 选下一位）：面板红色脉冲强调 */
-.play-panel.rg-forced {
-  position: relative;
-  border: 2px solid #ff5252;
-  border-radius: 12px;
-  padding: 10px;
-  background: rgba(229,57,53,0.08);
-}
-.play-panel.rg-forced::before {
-  content: '';
-  position: absolute; inset: 0;
-  border-radius: inherit;
-  box-shadow: 0 0 18px 3px rgba(255,82,82,0.55);
-  animation: rg-glow-pulse 1.2s ease-in-out infinite;
-  pointer-events: none;
-}
-
 /* ========== Regicide 行动预览 tip ========== */
 .rg-tip {
   border-radius: 10px; overflow: hidden;
@@ -234,5 +217,4 @@
 /* 系统偏好「减少动态效果」时停用脉冲动画 */
 @media (prefers-reduced-motion: reduce) {
   .rg-preview-fx::after { animation: none; opacity: 0.6; }
-  .play-panel.rg-forced::before { animation: none; opacity: 0.8; }
 }

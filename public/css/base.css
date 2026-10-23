@@ -273,6 +273,29 @@ label input, label select {
 .hand-wrap { background: rgba(0,0,0,0.2); border-radius: 12px; padding: 14px; }
 .hand { display: flex; gap: 10px; flex-wrap: wrap; min-height: calc(var(--card-h) + 2px); margin-bottom: 12px; }
 .play-panel { display: flex; flex-direction: column; gap: 8px; }
+
+/* ========== 强制操作面板：红色脉冲强调（全局通用） ========== */
+.panel-forced {
+  position: relative;
+  border: 2px solid #ff5252;
+  border-radius: 12px;
+  padding: 10px;
+  background: rgba(229,57,53,0.08);
+}
+/* 脉冲性能优化：阴影固定在伪元素上，仅动画 opacity（合成器处理，不逐帧重绘） */
+.panel-forced::before {
+  content: '';
+  position: absolute; inset: 0;
+  border-radius: inherit;
+  box-shadow: 0 0 18px 3px rgba(255,82,82,0.55);
+  animation: panel-forced-pulse 1.2s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes panel-forced-pulse {
+  0%, 100% { opacity: 0.25; }
+  50% { opacity: 1; }
+}
+
 .dest-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .dest-title { font-size: 12px; opacity: 0.7; min-width: 96px; }
 .dest-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -353,4 +376,5 @@ label input, label select {
     animation: none;
     opacity: 0.8;
   }
+  .panel-forced::before { animation: none; opacity: 0.8; }
 }

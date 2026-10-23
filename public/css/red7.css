@@ -181,22 +181,6 @@
   pointer-events: none;
 }
 
-/* ========== Red7 强制行动：行动面板红色脉冲强调 ========== */
-.play-panel.r7-forced {
-  position: relative;
-  border: 2px solid #ff5252;
-  border-radius: 12px;
-  padding: 10px;
-  background: rgba(229,57,53,0.08);
-}
-.play-panel.r7-forced::before {
-  content: '';
-  position: absolute; inset: 0;
-  border-radius: inherit;
-  box-shadow: 0 0 18px 3px rgba(255,82,82,0.55);
-  animation: r7-glow-pulse 1.2s ease-in-out infinite;
-  pointer-events: none;
-}
 /* 通用发光脉冲：仅对 opacity 做动画，避免逐帧重绘 box-shadow 占用 CPU */
 @keyframes r7-glow-pulse {
   0%, 100% { opacity: 0.25; }
@@ -335,7 +319,6 @@
     transform: translateY(0);
     background: linear-gradient(color-mix(in srgb, var(--kc) 70%, transparent), color-mix(in srgb, var(--kc) 70%, transparent));
   }
-  .play-panel.r7-forced::before { animation: none; opacity: 0.8; }
   .btn-end-suggest::after { animation: none; opacity: 0.8; }
   .r7-preview-fx::after { animation: none; opacity: 0.6; }
   .r7-preview-draw::after { animation: none; opacity: 0.6; }
