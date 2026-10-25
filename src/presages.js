@@ -1174,18 +1174,21 @@ export const PresagesGame = {
     },
   },
 
-  /** 结束本局并返回大厅：进行中仅房主可操作，结束后任意玩家可操作。 */
-  backToLobby: ({ G, ctx, playerID, events }) => {
-    if (!G.lobby || !G.lobby.started) return INVALID;
-    if (!G.ended && playerID !== '0') return INVALID;
-    const endedByHost = !G.ended;
-    const fresh = freshPresagesG(ctx, endedByHost
-      ? '房主已结束本局，房间已重置，可开始新一局。'
-      : '本局已结束，房间已重置，可开始新一局。');
-    for (const k of Object.keys(G)) delete G[k];
-    Object.assign(G, fresh);
-    events.setPhase('lobby');
-    return undefined;
+  /** 顶层 moves：不依赖阶段的通用操作。 */
+  moves: {
+    /** 结束本局并返回大厅：进行中仅房主可操作，结束后任意玩家可操作。 */
+    backToLobby: ({ G, ctx, playerID, events }) => {
+      if (!G.lobby || !G.lobby.started) return INVALID;
+      if (!G.ended && playerID !== '0') return INVALID;
+      const endedByHost = !G.ended;
+      const fresh = freshPresagesG(ctx, endedByHost
+        ? '房主已结束本局，房间已重置，可开始新一局。'
+        : '本局已结束，房间已重置，可开始新一局。');
+      for (const k of Object.keys(G)) delete G[k];
+      Object.assign(G, fresh);
+      events.setPhase('lobby');
+      return undefined;
+    },
   },
 
   /** 玩家视角：他人手牌仅显示张数；备用牌堆仅显示张数；秘密揭示仅对指定观看者可见。 */
