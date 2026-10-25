@@ -690,6 +690,26 @@ function awardRound(G, ctx, random, events, winnerId, reason) {
 
 // ---------- Game 定义 ----------
 
+/**
+ * 结束本局并返回房间大厅。
+ * 注意：boardgame.io 解析 move 时，只要当前 phase 定义了自己的 moves，
+ * 顶层 moves 就会被完全遮蔽（else-if 链），因此该 move 必须同时注册在
+ * lobby 与 play 两个 phase 的 moves 中。
+ */
+function backToLobbyMove({ G, ctx, playerID, events }) {
+  if (!G.lobby || !G.lobby.started) return INVALID; // 大厅阶段无需重置
+  if (!G.ended && playerID !== '0') return INVALID; // 进行中仅房主可结束
+  const endedByHost = !G.ended;
+  const fresh = freshPresagesG(ctx, endedByHost
+    ? '房主已结束本局，房间已重置，可开始新一局。'
+    : '本局已结束，房间已重置，可开始新一局。');
+  for (const k of Object.keys(G)) delete G[k];
+  Object.assign(G, fresh);
+  events.setPhase('lobby');
+  return undefined;
+}
+
+
 export const PresagesGame = {
   name: 'presages',
   minPlayers: 4,
@@ -748,6 +768,9 @@ export const PresagesGame = {
             return undefined;
           },
         },
+
+        /** 结束本局并返回大厅（本局结束后的「回到房间」）。 */
+        backToLobby: backToLobbyMove,
       },
     },
 
@@ -1170,24 +1193,10 @@ export const PresagesGame = {
             return undefined;
           },
         },
-      },
-    },
-  },
 
-  /** 顶层 moves：不依赖阶段的通用操作。 */
-  moves: {
-    /** 结束本局并返回大厅：进行中仅房主可操作，结束后任意玩家可操作。 */
-    backToLobby: ({ G, ctx, playerID, events }) => {
-      if (!G.lobby || !G.lobby.started) return INVALID;
-      if (!G.ended && playerID !== '0') return INVALID;
-      const endedByHost = !G.ended;
-      const fresh = freshPresagesG(ctx, endedByHost
-        ? '房主已结束本局，房间已重置，可开始新一局。'
-        : '本局已结束，房间已重置，可开始新一局。');
-      for (const k of Object.keys(G)) delete G[k];
-      Object.assign(G, fresh);
-      events.setPhase('lobby');
-      return undefined;
+        /** 结束本局并返回大厅（游戏结束后任意玩家、进行中仅房主）。 */
+        backToLobby: backToLobbyMove,
+      },
     },
   },
 

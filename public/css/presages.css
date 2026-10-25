@@ -77,12 +77,20 @@
 }
 .ps-sym svg { width: 15px; height: 15px; display: block; }
 
-/* 小卡：场上已打出的牌（不显示效果描述；点数与时机图标等大） */
-.ps-card-mini { width: 56px; height: 78px; padding: 10px 4px 7px; border-radius: 7px; gap: 2px; }
-.ps-card-mini .ps-corner { font-size: 13px; top: 2px; left: 5px; }
-.ps-card-mini .ps-sym svg { width: 13px; height: 13px; }
-.ps-card-mini .ps-name { font-size: 11px; }
+/* 小卡：场上已打出的牌（不显示效果描述）
+ * 尺寸与其他三款游戏一致：默认 --mini-w × --mini-h（46×62），
+ * 768px 断点 40×54、480px 断点 36×50，由 base.css 变量统一控制。
+ * 点数与时机图标保持等大（12 / 11 / 10）。 */
+.ps-card-mini {
+  width: var(--mini-w); height: var(--mini-h);
+  padding: 8px 3px 6px; border-radius: 6px; gap: 2px;
+}
+.ps-card-mini .ps-corner { font-size: 12px; top: 2px; left: 4px; }
+.ps-card-mini .ps-sym { top: 2px; right: 3px; }
+.ps-card-mini .ps-sym svg { width: 12px; height: 12px; }
+.ps-card-mini .ps-name { font-size: 10px; letter-spacing: 0.5px; }
 .ps-card-mini .ps-effect { display: none; }
+.ps-card-mini::after { left: 4px; right: 4px; bottom: 3px; height: 2px; }
 
 /* 上回合摘要中的卡牌引用：按卡牌颜色渲染（颜色由内联 style 注入） */
 .ps-last-card { font-weight: 700; filter: brightness(1.35); }
@@ -157,7 +165,7 @@
   color: #ffd966; border-color: rgba(255,217,102,0.55); background: rgba(255,217,102,0.14);
 }
 .ps-preview-discard {
-  color: #ff9a8a; border-color: rgba(255,120,105,0.5); background: rgba(255,120,105,0.12);
+  color: #9ad6a8; border-color: rgba(122,214,151,0.55); background: rgba(122,214,151,0.14);
 }
 
 /* 玩家区域底部：已打出牌的效果与细则（样式同 .ps-detail） */
@@ -197,12 +205,24 @@
 }
 
 /* ---------- 响应式 ---------- */
+
+/* 小卡尺寸由 base.css 的 --mini-w/--mini-h 提供（768px→40×54，480px→36×50），
+ * 这里只按断点收紧内部点数/时机图标/名称字号，保持点数与图标等大。 */
+@media (max-width: 768px) {
+  .ps-card-mini .ps-corner { font-size: 11px; }
+  .ps-card-mini .ps-sym svg { width: 11px; height: 11px; }
+  .ps-card-mini .ps-name { font-size: 9px; }
+}
+@media (max-width: 480px) {
+  .ps-card-mini .ps-corner { font-size: 10px; }
+  .ps-card-mini .ps-sym svg { width: 10px; height: 10px; }
+  .ps-card-mini .ps-name { font-size: 8.5px; }
+}
+
 @media (max-width: 640px) {
   .ps-round-title { font-size: 16px; }
   .ps-card { width: 82px; height: 118px; padding: 12px 5px 8px; }
-  .ps-card-mini { width: 50px; height: 70px; }
   .ps-corner { font-size: 15px; }
-  .ps-card-mini .ps-corner { font-size: 12px; }
   .ps-detail-title { font-size: 13px; }
   .ps-panel-hint { font-size: 12px; }
 }

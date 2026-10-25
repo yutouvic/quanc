@@ -38,7 +38,7 @@ let prevEnded = false;       // 上一帧是否已结束（用于一次性触发
 let justEnded = false;       // 本帧是否为游戏结束瞬间
 let prevCardLocations = new Map(); // 上一帧的「卡牌 id → 逻辑位置」映射，用于 diff 出移动/新增/消失以播放飞行动画
 const loadedCSS = new Set(); // 已动态加载的游戏 CSS 路径（去重）
-const CSS_VERSION = '43';     // CSS 版本号：样式更新时递增，防止浏览器缓存旧样式
+const CSS_VERSION = '45';     // CSS 版本号：样式更新时递增，防止浏览器缓存旧样式
 let rgSelected = [];         // Regicide 手牌多选索引（连招 / 承伤弃牌共用）
 let prevRgForced = false;    // Regicide 上一帧是否处于强制结算（用于自动定位只触发一次）
 let psSelected = null;       // Presages 当前选中的手牌索引
@@ -1844,7 +1844,7 @@ function renderPresagesTable(state) {
     lr.discarded.forEach((d, i) => {
       if (i > 0) bodyChildren.push(document.createTextNode('，'));
       const ownerName = nicknames.get(String(d.owner)) || `玩家 ${d.owner}`;
-      bodyChildren.push(document.createTextNode(`${ownerName} 弃掉 `), cardRefNode(d.card));
+      bodyChildren.push(document.createTextNode(`【${ownerName}】弃掉`), cardRefNode(d.card));
     });
     if (lr.discarded.length === 0) bodyChildren.push(document.createTextNode('无弃牌'));
     container.appendChild(el('div', { class: 'ps-last', style: `--tc:${PRESAGES_TEAM_COLORS[lr.winnerTeam] || '#888'}` }, [
