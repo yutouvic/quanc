@@ -68,9 +68,9 @@
   mix-blend-mode: screen; pointer-events: none;
 }
 .card-emblem {
-  width: 56px; height: 56px; border-radius: 50%;
+  width: 54px; height: 54px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  font-size: 38px; color: #f2ead8; position: relative; z-index: 1;
+  font-size: 37px; color: #f2ead8; position: relative; z-index: 1;
   background: radial-gradient(circle at 34% 28%, rgba(255,255,255,0.16), rgba(0,0,0,0.28) 72%);
   border: 1px solid color-mix(in srgb, var(--c) 70%, #fff 8%);
   box-shadow:

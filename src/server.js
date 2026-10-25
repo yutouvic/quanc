@@ -54,6 +54,23 @@ function readRawBody(req) {
   });
 }
 
+/**
+ * 同一房间的加入请求串行化。
+ * 重名校验与真正的入座是两次异步读写，多标签页/并发请求可能同时通过校验，
+ * 随后各自占用不同空座位，导致大厅出现两个相同昵称。
+ */
+const joinLocks = new Map();
+
+function withMatchJoinLock(matchID, task) {
+  const prev = joinLocks.get(matchID) || Promise.resolve();
+  const run = prev.then(task, task);
+  const tail = run.catch(() => {});
+  joinLocks.set(matchID, tail);
+  return run.finally(() => {
+    if (joinLocks.get(matchID) === tail) joinLocks.delete(matchID);
+  });
+}
+
 // 房间加入拦截：
 // 1. 开局后禁止新玩家加入（房间固定 5 个座位，未开局前可随时加入空座位）；
 // 2. 同一房间内玩家昵称不能重名。
@@ -63,42 +80,46 @@ server.app.middleware.unshift(async (ctx, next) => {
   const match = /^\/games\/[^/]+\/([^/]+)\/join$/.exec(ctx.path);
   if (ctx.method === 'POST' && match) {
     const matchID = decodeURIComponent(match[1]);
-    const { state, metadata } = await server.db.fetch(matchID, {
-      state: true,
-      metadata: true,
-    });
-    if (state?.G?.lobby?.started) {
-      ctx.status = 403;
-      ctx.body = '游戏已开始，无法加入';
-      return;
-    }
-    // 先消费请求体做重名校验（此时 koa-body 尚未运行）
-    let raw = Buffer.alloc(0);
-    let body = {};
-    try {
-      raw = await readRawBody(ctx.req);
-      body = JSON.parse(raw.toString('utf8') || '{}');
-    } catch {
-      body = {}; // 解析失败交由下游 koa-body 处理
-    }
-    const playerName = typeof body.playerName === 'string' ? body.playerName.trim() : '';
-    if (playerName) {
-      // metadata.players 为 { 座位号: { name, ... } } 的映射（也可能是数组），统一按值遍历
-      const duplicated = Object.values(metadata?.players || {}).some(
-        (p) => p && p.name && p.name === playerName,
-      );
-      if (duplicated) {
+    await withMatchJoinLock(matchID, async () => {
+      const { state, metadata } = await server.db.fetch(matchID, {
+        state: true,
+        metadata: true,
+      });
+      if (state?.G?.lobby?.started) {
         ctx.status = 403;
-        ctx.body = '昵称已被房间内玩家使用，请更换昵称';
+        ctx.body = '游戏已开始，无法加入';
         return;
       }
-    }
-    // 校验通过：把已消费的请求体重放为新的流，供下游 koa-body 正常解析
-    // （koa-body 从 ctx.req 读流并依赖 headers 判断类型，需一并保留）
-    const replay = new PassThrough();
-    replay.headers = ctx.req.headers;
-    replay.end(raw);
-    ctx.req = replay;
+      // 先消费请求体做重名校验（此时 koa-body 尚未运行）
+      let raw = Buffer.alloc(0);
+      let body = {};
+      try {
+        raw = await readRawBody(ctx.req);
+        body = JSON.parse(raw.toString('utf8') || '{}');
+      } catch {
+        body = {}; // 解析失败交由下游 koa-body 处理
+      }
+      const playerName = typeof body.playerName === 'string' ? body.playerName.trim() : '';
+      if (playerName) {
+        // metadata.players 为 { 座位号: { name, ... } } 的映射（也可能是数组），统一按值遍历
+        const duplicated = Object.values(metadata?.players || {}).some(
+          (p) => p && p.name && p.name === playerName,
+        );
+        if (duplicated) {
+          ctx.status = 403;
+          ctx.body = '昵称已被房间内玩家使用，请更换昵称';
+          return;
+        }
+      }
+      // 校验通过：把已消费的请求体重放为新的流，供下游 koa-body 正常解析
+      // （koa-body 从 ctx.req 读流并依赖 headers 判断类型，需一并保留）
+      const replay = new PassThrough();
+      replay.headers = ctx.req.headers;
+      replay.end(raw);
+      ctx.req = replay;
+      await next();
+    });
+    return;
   }
   await next();
 });

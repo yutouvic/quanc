@@ -31,7 +31,7 @@ let prevEnded = false;       // 上一帧是否已结束（用于一次性触发
 let justEnded = false;       // 本帧是否为游戏结束瞬间
 let prevCardLocations = new Map(); // 上一帧的「卡牌 id → 逻辑位置」映射，用于 diff 出移动/新增/消失以播放飞行动画
 const loadedCSS = new Set(); // 已动态加载的游戏 CSS 路径（去重）
-const CSS_VERSION = '25';     // CSS 版本号：样式更新时递增，防止浏览器缓存旧样式
+const CSS_VERSION = '26';     // CSS 版本号：样式更新时递增，防止浏览器缓存旧样式
 let rgSelected = [];         // Regicide 手牌多选索引（连招 / 承伤弃牌共用）
 let prevRgForced = false;    // Regicide 上一帧是否处于强制结算（用于自动定位只触发一次）
 
@@ -1935,13 +1935,13 @@ function renderLobby(state) {
   }
 }
 
-// ---------- 会话持久化（刷新不退出） ----------
+// ---------- 会话持久化（localStorage：刷新 / 关闭浏览器后仍可恢复） ----------
 
 /** 保存当前房间与座位信息，供刷新后恢复。 */
 function saveSession() {
   if (!roomInfo) return;
   try {
-    sessionStorage.setItem(SESSION_KEY, JSON.stringify({
+    localStorage.setItem(SESSION_KEY, JSON.stringify({
       ...roomInfo,
       playerName: currentPlayerName,
       game: gameName(),
@@ -1954,7 +1954,7 @@ function saveSession() {
 /** 读取已保存的房间与座位信息；缺失或格式异常时返回 null。 */
 function loadSession() {
   try {
-    const raw = sessionStorage.getItem(SESSION_KEY);
+    const raw = localStorage.getItem(SESSION_KEY);
     if (!raw) return null;
     const saved = JSON.parse(raw);
     if (!saved || !saved.matchID || saved.playerID == null || !saved.credentials || !saved.game) return null;
@@ -1966,7 +1966,7 @@ function loadSession() {
 
 function clearSession() {
   try {
-    sessionStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem(SESSION_KEY);
   } catch {
     // 忽略存储异常
   }
