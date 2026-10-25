@@ -1,0 +1,208 @@
+/* ==========================================================================
+   Presages（奥秘小队）样式
+   布局复用 base.css 的 .game-layout / .table-wrap / .players / .hand-wrap
+   ========================================================================== */
+
+/* ---------- 顶部：轮次与状态 ---------- */
+.ps-round-head {
+  display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;
+  flex-wrap: wrap;
+}
+.ps-round-main { display: flex; flex-direction: column; gap: 3px; }
+.ps-round-title { font-size: 19px; font-weight: 700; color: #ffd966; letter-spacing: 1px; }
+.ps-round-sub { font-size: 12px; opacity: 0.65; }
+.ps-status {
+  align-self: center;
+  padding: 4px 12px; border-radius: 999px;
+  background: rgba(255,217,102,0.12);
+  border: 1px solid rgba(255,217,102,0.4);
+  color: #ffd966; font-size: 12px; font-weight: 600;
+}
+
+/* ---------- 律法提示 ---------- */
+.ps-law {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 12px; border-radius: 9px;
+  background: rgba(217,174,46,0.12);
+  border: 1px solid rgba(217,174,46,0.45);
+  font-size: 13px; color: #ffe08a;
+}
+.ps-law-badge {
+  flex: 0 0 auto; padding: 1px 8px; border-radius: 999px;
+  background: #d9ae2e; color: #241d05; font-weight: 700; font-size: 12px;
+}
+
+/* ---------- 卡牌 ---------- */
+.ps-card {
+  position: relative;
+  width: 96px; height: 132px;
+  border-radius: 9px;
+  background:
+    linear-gradient(160deg, rgba(255,255,255,0.34), rgba(255,255,255,0) 44%),
+    linear-gradient(158deg, var(--c) 0%, #16181c 138%);
+  border: 1px solid rgba(255,255,255,0.26);
+  box-shadow: 0 3px 10px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.18);
+  color: var(--ink);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 3px; padding: 14px 6px 9px;
+  user-select: none;
+  transition: transform 0.14s ease, box-shadow 0.16s ease, filter 0.16s ease, opacity 0.16s ease;
+  flex: 0 0 auto;
+}
+.ps-card::after {
+  /* 颜色识别条 */
+  content: '';
+  position: absolute; left: 6px; right: 6px; bottom: 4px; height: 3px;
+  border-radius: 3px;
+  background: var(--c);
+  opacity: 0.85;
+}
+/* 左上角：点数 */
+.ps-corner {
+  position: absolute; top: 3px; left: 7px;
+  font-size: 17px; font-weight: 800; line-height: 1; letter-spacing: -0.5px;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.4);
+}
+.ps-name { font-size: 13px; font-weight: 700; letter-spacing: 1px; opacity: 0.96; text-align: center; }
+/* 名称下方居中：效果描述（过长时截断；细则提醒仅在详情面板显示） */
+.ps-effect {
+  font-size: 8.5px; line-height: 1.4; opacity: 0.92; text-align: center;
+  display: -webkit-box; -webkit-line-clamp: 6; line-clamp: 6; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.ps-sym {
+  position: absolute; top: 4px; right: 5px;
+  font-size: 12px; line-height: 1;
+  opacity: 0.85; filter: drop-shadow(0 1px 1px rgba(0,0,0,0.5));
+}
+.ps-sym svg { width: 15px; height: 15px; display: block; }
+
+/* 小卡：场上已打出的牌（不显示效果描述；点数与时机图标等大） */
+.ps-card-mini { width: 56px; height: 78px; padding: 10px 4px 7px; border-radius: 7px; gap: 2px; }
+.ps-card-mini .ps-corner { font-size: 13px; top: 2px; left: 5px; }
+.ps-card-mini .ps-sym svg { width: 13px; height: 13px; }
+.ps-card-mini .ps-name { font-size: 11px; }
+.ps-card-mini .ps-effect { display: none; }
+
+/* 上回合摘要中的卡牌引用：按卡牌颜色渲染（颜色由内联 style 注入） */
+.ps-last-card { font-weight: 700; filter: brightness(1.35); }
+.ps-card-static { cursor: default; }
+.ps-card-clickable { cursor: pointer; }
+.ps-card-clickable:hover { transform: translateY(-4px); box-shadow: 0 8px 18px rgba(0,0,0,0.55); }
+.ps-card-clickable:active { transform: translateY(-1px); }
+.ps-card-selected {
+  transform: translateY(-8px);
+  border: 2px solid #ffd966;
+  box-shadow: 0 0 0 2px rgba(255,217,102,0.35), 0 10px 22px rgba(0,0,0,0.6);
+}
+.ps-card-dimmed { opacity: 0.36; filter: grayscale(0.6); cursor: not-allowed; }
+.ps-card-dimmed:hover { transform: none; }
+
+/* 当前获胜牌：仅对伪元素 opacity 做动画，避免逐帧重绘阴影 */
+.ps-card-winning { border: 2px solid #ffd966; }
+.ps-card-winning::before {
+  content: '';
+  position: absolute; inset: -4px;
+  border-radius: 11px;
+  box-shadow: 0 0 0 1px rgba(255,217,102,0.55), 0 0 18px rgba(255,217,102,0.55);
+  animation: ps-win-pulse 1.8s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes ps-win-pulse {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 1; }
+}
+
+/* ---------- 揭示与上回合摘要 ---------- */
+.ps-reveals { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 12px; }
+.ps-reveals-label { opacity: 0.65; }
+.ps-reveal-chip {
+  padding: 2px 9px; border-radius: 999px;
+  background: rgba(138,92,201,0.18);
+  border: 1px solid rgba(138,92,201,0.5);
+  color: #ddc9ff;
+}
+.ps-last {
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+  padding: 7px 11px; border-radius: 8px;
+  background: rgba(0,0,0,0.2);
+  border-left: 3px solid var(--tc);
+  font-size: 12px;
+}
+.ps-last-title { font-weight: 700; color: var(--tc); flex: 0 0 auto; }
+.ps-last-body { opacity: 0.82; }
+.ps-reserve { font-size: 11px; opacity: 0.45; text-align: right; }
+
+/* ---------- 玩家区域（复用 base.css 的 .territory / .active / data-turn-text） ---------- */
+.ps-player { display: flex; flex-direction: column; gap: 7px; }
+.ps-player .territory-head { margin-bottom: 0; }
+.ps-player-team { font-size: 11px; color: var(--tc); font-weight: 700; flex: 0 0 auto; }
+.ps-player-stats { display: flex; flex-wrap: wrap; gap: 3px 10px; font-size: 11px; opacity: 0.82; }
+.ps-stat-done { color: #9ad6a8; opacity: 1; }
+/* 玩家框内已打出的牌：与手牌一致的大卡样式 */
+.ps-played { display: flex; flex-wrap: wrap; gap: 8px; min-height: 30px; }
+.ps-played .empty-hint { align-self: center; padding: 6px 0; }
+
+/* 卡牌旁的结算预览：赢/可弃掉 chip（纵向排列于大卡右侧，仅标注正状态） */
+.ps-played-item { display: flex; align-items: center; gap: 6px; }
+.ps-preview { display: flex; flex-direction: column; gap: 4px; }
+.ps-preview-chip {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 40px; padding: 2px 7px; border-radius: 999px;
+  font-size: 10px; font-weight: 700; white-space: nowrap; line-height: 1.5;
+  text-align: center;
+  border: 1px solid transparent;
+}
+.ps-preview-win {
+  color: #ffd966; border-color: rgba(255,217,102,0.55); background: rgba(255,217,102,0.14);
+}
+.ps-preview-discard {
+  color: #ff9a8a; border-color: rgba(255,120,105,0.5); background: rgba(255,120,105,0.12);
+}
+
+/* 玩家区域底部：已打出牌的效果与细则（样式同 .ps-detail） */
+.ps-played-details { display: flex; flex-direction: column; gap: 5px; }
+.ps-played-detail {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 5px 9px; border-radius: 7px;
+  background: rgba(0,0,0,0.22);
+  border-left: 3px solid var(--c);
+}
+.ps-played-detail-title { font-size: 11px; font-weight: 700; color: var(--c); filter: brightness(1.3); }
+.ps-played-detail-text { font-size: 10.5px; line-height: 1.5; opacity: 0.85; }
+.ps-played-detail-note { font-size: 10px; line-height: 1.5; opacity: 0.6; }
+
+/* ---------- 底部操作面板 ---------- */
+.ps-panel-title {
+  font-size: 14px; font-weight: 700; color: #ffd966; letter-spacing: 0.5px;
+}
+.ps-panel-hint { font-size: 13px; opacity: 0.72; line-height: 1.6; }
+.ps-panel-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.ps-dream-row .btn { flex: 0 1 auto; }
+.ps-detail {
+  display: flex; flex-direction: column; gap: 3px;
+  padding: 9px 12px; border-radius: 9px;
+  background: rgba(0,0,0,0.22);
+  border-left: 4px solid var(--c);
+}
+.ps-detail-title { font-size: 14px; font-weight: 700; color: var(--c); filter: brightness(1.25); }
+.ps-detail-text { font-size: 12px; line-height: 1.6; opacity: 0.85; }
+.ps-detail-note { font-size: 11.5px; line-height: 1.6; opacity: 0.6; }
+
+/* ---------- 结算面板 ---------- */
+#gameover .ps-win-team { font-weight: 700; color: var(--tc); font-size: 15px; }
+#gameover .ps-go-label { opacity: 0.65; font-size: 12px; }
+#gameover .ps-go-team {
+  margin-right: 10px; font-size: 12px; font-weight: 600; color: var(--tc);
+}
+
+/* ---------- 响应式 ---------- */
+@media (max-width: 640px) {
+  .ps-round-title { font-size: 16px; }
+  .ps-card { width: 82px; height: 118px; padding: 12px 5px 8px; }
+  .ps-card-mini { width: 50px; height: 70px; }
+  .ps-corner { font-size: 15px; }
+  .ps-card-mini .ps-corner { font-size: 12px; }
+  .ps-detail-title { font-size: 13px; }
+  .ps-panel-hint { font-size: 12px; }
+}

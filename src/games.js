@@ -14,12 +14,13 @@
 import { QuancGame } from './quanc.js';
 import { Red7Game } from './red7.js';
 import { RegicideGame } from './regicide.js';
+import { PresagesGame } from './presages.js';
 
 export const GAMES = [
   {
     title: 'Quanc',
     tagline: '2-5 人 · 回合制 · 卡牌博弈',
-    description: '六大家族争名逐利，是扶持，是制衡，还是压制？间谍潜伏、刺客暗算、贵族权重，阴谋一触即发。',
+    description: '六大家族争名逐利，是扶持，是制衡，还是打压？间谍潜伏、刺客暗算、贵族权重，阴谋一触即发。',
     icon: '🦁',
     color: '#d6c01bff',
     game: QuancGame,
@@ -28,9 +29,9 @@ export const GAMES = [
   },
   {
     title: 'Red7',
-    tagline: '2-4 人 · 规则瞬息万变 · 卡牌博弈',
-    description: '计划不如变化快。7个点数、7种颜色，规则组合千变万化。淘汰你的对手，坚持到最后。',
-    icon: '🔴',
+    tagline: '2-4 人 · 可变规则 · 中途淘汰',
+    description: '计划不如变化快。7个点数、7种颜色，规则组合千变万化。淘汰你的对手，坚持活到最后。',
+    icon: '🌈',
     color: '#e53935',
     game: Red7Game,
     css: 'css/red7.css',
@@ -38,13 +39,23 @@ export const GAMES = [
   },
   {
     title: 'Regicide',
-    tagline: '2-4 人 · 合作游戏 · 击败魔王',
+    tagline: '2-4 人 · 合作游戏 · 全体生存',
     description: '全体玩家合力齐心击败 12 位敌人，巧妙运用花色和组合，抵御魔王的进攻，不能丢下任何一个队友，否则你们就会落败。',
-    icon: '👑',
-    color: '#8e6cc9',
+    icon: '⚔️',
+    color: '#78c96cff',
     game: RegicideGame,
     css: 'css/regicide.css',
     template: 'template-regicide',
+  },
+  {
+    title: 'Presages',
+    tagline: '4-6 人 · 团队对抗 · 奥秘对决',
+    description: '玩家结成小队，在禁止沟通的默契中出牌、结算奥秘效果，率先赢得两轮的小队获胜。',
+    icon: '🔮',
+    color: '#613f9bff',
+    game: PresagesGame,
+    css: 'css/presages.css',
+    template: 'template-presages',
   },
 ];
 

@@ -8,9 +8,16 @@ import { SocketIO } from 'boardgame.io/multiplayer';
 import { QuancGame, computeFamilyFates, pLabel, getTask } from './quanc.js';
 import { Red7Game, RED7_COLORS, computeWinningIds, ruleKeyCards, effectiveRuleIndex } from './red7.js';
 import { RegicideGame, RG_SUITS, rgDiscardValue } from './regicide.js';
+import {
+  PresagesGame,
+  PRESAGES_COLOR_META,
+  PRESAGES_TEAM_COLORS,
+  PRESAGES_TEAM_SYMBOLS,
+  presagesResolutionPreview,
+} from './presages.js';
 import { GAMES, getGame } from './games.js';
 import { FAMILIES, getFamily } from './quanc-cards.js';
-import { FAMILY_ICONS, TYPE_ICONS, BACK_EMBLEM } from './quanc-icons.js';
+import { FAMILY_ICONS, TYPE_ICONS, BACK_EMBLEM, PRESAGES_TIMING_ICONS } from './quanc-icons.js';
 
 const API_BASE = `${window.location.protocol}//${window.location.host}`;
 /** 会话存储键：保存当前房间与座位凭证，用于刷新后自动恢复。 */
@@ -31,9 +38,11 @@ let prevEnded = false;       // 上一帧是否已结束（用于一次性触发
 let justEnded = false;       // 本帧是否为游戏结束瞬间
 let prevCardLocations = new Map(); // 上一帧的「卡牌 id → 逻辑位置」映射，用于 diff 出移动/新增/消失以播放飞行动画
 const loadedCSS = new Set(); // 已动态加载的游戏 CSS 路径（去重）
-const CSS_VERSION = '28';     // CSS 版本号：样式更新时递增，防止浏览器缓存旧样式
+const CSS_VERSION = '43';     // CSS 版本号：样式更新时递增，防止浏览器缓存旧样式
 let rgSelected = [];         // Regicide 手牌多选索引（连招 / 承伤弃牌共用）
 let prevRgForced = false;    // Regicide 上一帧是否处于强制结算（用于自动定位只触发一次）
+let psSelected = null;       // Presages 当前选中的手牌索引
+let psDreamTarget = '';      // Presages 《梦》的放置目标（空串表示打在自己面前）
 
 /** 当前游戏的 boardgame.io 名称（大厅路由键），未选择时为空串。 */
 function gameName() {
@@ -723,10 +732,17 @@ function resetRegicideSelection() {
   prevRgForced = false;
 }
 
+/** 清空 Presages 的选中手牌与《梦》放置目标。 */
+function resetPresagesSelection() {
+  psSelected = null;
+  psDreamTarget = '';
+}
+
 /** 重置与单局渲染相关的临时状态（进入房间 / 返回房间大厅时调用）。 */
 function resetGameUIState() {
   resetRed7Selection();
   resetRegicideSelection();
+  resetPresagesSelection();
   seenCardIds.clear();
   prevEnded = false;
   justEnded = false;
@@ -1694,10 +1710,591 @@ function renderRegicide(state) {
  * 各游戏的渲染函数（按 game.name 注册）。
  * 新增游戏时，在此把 game.name 映射到对应的渲染函数即可。
  */
+// ---------- Presages 渲染 ----------
+
+/** 读取一名玩家的手牌张数（他人手牌在 playerView 中只有数字）。 */
+function psHandCount(G, id) {
+  const p = G.players && G.players[id];
+  if (!p) return 0;
+  if (Array.isArray(p.hand)) return p.hand.length;
+  return Number(p.hand) || 0;
+}
+
+/** Presages 卡牌节点：左上角点数 + 右上时机图标 + 名称 + 效果描述（细则提醒仅在详情面板显示，无悬停提示）。 */
+function presagesCardNode(card, {
+  selected = false, dimmed = false, clickable = false, winning = false,
+  mini = false,
+  onClick = undefined, extraClass = '',
+} = {}) {
+  const meta = PRESAGES_COLOR_META[card.color] || PRESAGES_COLOR_META.green;
+  const cls = ['ps-card'];
+  if (mini) cls.push('ps-card-mini');
+  if (selected) cls.push('ps-card-selected');
+  if (dimmed) cls.push('ps-card-dimmed');
+  if (clickable) cls.push('ps-card-clickable');
+  if (winning) cls.push('ps-card-winning');
+  if (extraClass) cls.push(extraClass);
+  if (!onClick) cls.push('ps-card-static');
+  const attrs = {
+    class: cls.join(' '),
+    style: `--c:${meta.color};--ink:${meta.ink}`,
+    'data-card-id': card.id,
+  };
+  if (onClick) { attrs.role = 'button'; attrs.tabindex = '0'; attrs.onClick = onClick; }
+  return el('div', attrs, [
+    el('div', { class: 'ps-corner', text: String(card.number) }),
+    el('div', { class: 'ps-sym' }, [svgNode(PRESAGES_TIMING_ICONS[card.timing === 'lightning' ? 'lightning' : 'hourglass'])]),
+    el('div', { class: 'ps-name', text: card.name }),
+    el('div', { class: 'ps-effect', text: card.effect }),
+  ]);
+}
+
+/** Presages 玩家框内已打出的一张牌：小卡 + 结算预览（会赢/会被弃），待结算时承担嫉妒/背叛/愤怒的点选。 */
+function presagesFieldNode(entry, index, playerID, pending, preview) {
+  let onClick;
+  if (pending && pending.playerID === playerID) {
+    if (pending.type === 'envy' && entry.card.id !== pending.envyCardId) {
+      onClick = () => client.moves.resolveEnvy(index);
+    } else if (pending.type === 'betrayalField' && entry.card.id !== pending.betrayalCardId) {
+      onClick = () => client.moves.resolveBetrayalField(index);
+    } else if (pending.type === 'angerField' && entry.owner === playerID) {
+      onClick = () => client.moves.resolveAngerField(index);
+    }
+  }
+  const isWinner = !!preview && preview.winningCardId === entry.card.id;
+  const willDiscard = !!preview && preview.discardedIds.includes(entry.card.id);
+  // 弃牌来源（效果导致）；仅因「赢得本回合」被弃时不显示来源
+  const effectReasons = (preview && preview.discardReasons[entry.card.id]) || [];
+  const discardSources = effectReasons.filter((r) => r !== '赢得本回合');
+  const card = presagesCardNode(entry.card, {
+    mini: true,
+    clickable: !!onClick,
+    winning: isWinner,
+    onClick,
+  });
+  if (!preview) return card;
+  // 结算预览：仅标注会赢/会被效果弃掉的牌（后续出牌会改变结果）
+  const chips = [];
+  if (isWinner) chips.push(el('span', { class: 'ps-preview-chip ps-preview-win', text: '赢' }));
+  if (willDiscard && discardSources.length > 0) {
+    chips.push(el('span', { class: 'ps-preview-chip ps-preview-discard', text: '可弃掉' }));
+  }
+  if (chips.length === 0) return card;
+  return el('div', { class: 'ps-played-item' }, [
+    card,
+    el('div', { class: 'ps-preview' }, chips),
+  ]);
+}
+
+/** Presages 顶部：轮次、律法与上一回合结算（队伍信息在各玩家框内，打出的牌显示在各自玩家框内）。 */
+function renderPresagesTable(state) {
+  const G = state.G;
+  const container = $('#table');
+  container.innerHTML = '';
+  const nicknames = nicknameMap();
+
+  // 轮次与状态
+  const status = G.ended
+    ? '本局已结束'
+    : G.pending
+      ? `等待 ${nicknames.get(String(G.pending.playerID)) || `玩家 ${G.pending.playerID}`} 作出选择`
+      : G.turnConfirm
+        ? '全员已出牌，等待确认结束回合'
+        : `轮到 ${nicknames.get(String(G.playStage)) || `玩家 ${G.playStage}`} 出牌`;
+  container.appendChild(el('div', { class: 'ps-round-head' }, [
+    el('div', { class: 'ps-round-main' }, [
+      el('div', { class: 'ps-round-title', text: `第 ${G.round} 轮 · 第 ${G.turnNo} 回合` }),
+      el('div', { class: 'ps-round-sub', text: '先赢得 2 轮的小队获胜 · 禁止任何形式的沟通' }),
+    ]),
+    el('div', { class: 'ps-status', text: status }),
+  ]));
+
+  if (G.law) {
+    container.appendChild(el('div', { class: 'ps-law' }, [
+      el('span', { class: 'ps-law-badge', text: '律法' }),
+      el('span', {
+        text: `本回合尚未出牌的玩家须打出${G.law.mode === 'lower' ? '低于' : '高于'} 15 的牌。`,
+      }),
+    ]));
+  }
+
+  // 秘密揭示（仅对观看者/持有者可见）
+  const visibleReveals = (G.reveals || []).filter((r) => r.card);
+  if (visibleReveals.length > 0) {
+    container.appendChild(el('div', { class: 'ps-reveals' }, [
+      el('span', { class: 'ps-reveals-label', text: '揭示给你：' }),
+      ...visibleReveals.map((r) => el('span', {
+        class: 'ps-reveal-chip',
+        text: `${nicknames.get(String(r.ownerId)) || `玩家 ${r.ownerId}`} → ${r.card.number}《${r.card.name}》`,
+      })),
+    ]));
+  }
+
+  // 上一回合结算摘要
+  const lr = G.lastResolution;
+  if (lr) {
+    // 卡牌引用按其颜色渲染（.ps-last-card）
+    const cardRefNode = (card) => el('span', {
+      class: 'ps-last-card',
+      style: `color:${(PRESAGES_COLOR_META[card.color] || PRESAGES_COLOR_META.green).color}`,
+      text: `${card.number}《${card.name}》`,
+    });
+    // 格式：「XX玩家 弃掉 N《牌》 ，YY玩家 弃掉 M《牌》」
+    const bodyChildren = [];
+    lr.discarded.forEach((d, i) => {
+      if (i > 0) bodyChildren.push(document.createTextNode('，'));
+      const ownerName = nicknames.get(String(d.owner)) || `玩家 ${d.owner}`;
+      bodyChildren.push(document.createTextNode(`${ownerName} 弃掉 `), cardRefNode(d.card));
+    });
+    if (lr.discarded.length === 0) bodyChildren.push(document.createTextNode('无弃牌'));
+    container.appendChild(el('div', { class: 'ps-last', style: `--tc:${PRESAGES_TEAM_COLORS[lr.winnerTeam] || '#888'}` }, [
+      el('span', { class: 'ps-last-title', text: '上一回合' }),
+      el('span', { class: 'ps-last-body' }, bodyChildren),
+    ]));
+  }
+
+  if (G.reserve != null) {
+    container.appendChild(el('div', {
+      class: 'ps-reserve',
+      text: `备用牌堆：${G.reserve} 张（本轮不使用）`,
+    }));
+  }
+}
+
+/** Presages 玩家区域：与 Quanc/Red7 一致使用 .territory 样式，打出的牌显示在各自框内。 */
+function renderPresagesPlayers(state) {
+  const G = state.G;
+  const playerID = state.playerID;
+  const container = $('#players');
+  container.innerHTML = '';
+  const nicknames = nicknameMap();
+  const preview = presagesResolutionPreview(G.field);
+  for (const id of G.playOrder) {
+    const isMe = id === playerID;
+    const team = G.teamOf[id];
+    const color = PRESAGES_TEAM_COLORS[team] || '#8b8b8b';
+    // 与 Quanc/Red7 一致：当前应行动（出牌或待选择）的玩家金色高亮 + 角标
+    const isCurrent = !G.ended && (G.playStage === id || (G.pending && G.pending.playerID === id));
+    const turnText = isCurrent ? (isMe ? '轮到你了' : '该玩家行动中') : '';
+    const cls = ['territory', 'ps-player'];
+    if (isCurrent) cls.push('active');
+    if (isMe) cls.push('me');
+    const playedEntries = G.field
+      .map((entry, index) => ({ entry, index }))
+      .filter((item) => item.entry.owner === id)
+      .sort((a, b) => b.entry.card.number - a.entry.card.number);
+    const boxChildren = [
+      el('div', { class: 'territory-head' }, [
+        el('span', { class: 'territory-name' }, [playerNameNode(id, nicknames, { me: isMe })]),
+        el('span', { class: 'ps-player-team', style: `--tc:${color}`, text: `小队${PRESAGES_TEAM_SYMBOLS[team] || ''}${' 🏆'.repeat(G.teamWins[team] || 0)}` }),
+      ]),
+      el('div', { class: 'ps-player-stats' }, [
+        el('span', { class: 'ps-stat', text: `手牌 ${psHandCount(G, id)}` }),
+      ]),
+      el('div', { class: 'ps-played' },
+        playedEntries.length === 0
+          ? [el('span', { class: 'empty-hint', text: '尚未出牌' })]
+          : playedEntries.map((item) => presagesFieldNode(item.entry, item.index, playerID, G.pending, preview)),
+      ),
+    ];
+    // 区域内有已打出的牌时，在底部显示每张牌的效果描述与细则（样式同 ps-detail）
+    if (playedEntries.length > 0) {
+      boxChildren.push(el('div', { class: 'ps-played-details' },
+        playedEntries.map(({ entry }) => {
+          const meta = PRESAGES_COLOR_META[entry.card.color] || PRESAGES_COLOR_META.green;
+          const rows = [
+            el('div', { class: 'ps-played-detail-title', text: `${entry.card.number}《${entry.card.name}》` }),
+            el('div', { class: 'ps-played-detail-text', text: entry.card.effect }),
+          ];
+          if (entry.card.note) {
+            rows.push(el('div', { class: 'ps-played-detail-note', text: `注：${entry.card.note}` }));
+          }
+          return el('div', { class: 'ps-played-detail', style: `--c:${meta.color}` }, rows);
+        }),
+      ));
+    }
+    container.appendChild(el('div', { class: cls.join(' '), 'data-turn-text': turnText }, boxChildren));
+  }
+}
+
+/** Presages 是否允许按律法打出某张牌（手牌中存在符合条件者时强制）。 */
+function psLawAllows(G, card) {
+  if (!G.law) return true;
+  const me = G.players[statePlayerID()];
+  const hand = me && Array.isArray(me.hand) ? me.hand : [];
+  const meets = (c) => (G.law.mode === 'lower' ? c.number < 15 : c.number > 15);
+  const hasValid = hand.some(meets);
+  if (!hasValid) return true;
+  return meets(card);
+}
+
+/** 当前查看者 id（playerView 渲染期间由 currentState 提供）。 */
+function statePlayerID() {
+  return currentState ? currentState.playerID : '';
+}
+
+/** Presages 手牌区：普通选中出牌，或在待结算时直接点选手牌完成选择。 */
+function renderPresagesHand(state) {
+  const G = state.G;
+  const playerID = state.playerID;
+  const container = $('#hand');
+  container.innerHTML = '';
+  const me = G.players[playerID];
+  if (!me || !Array.isArray(me.hand)) return;
+
+  const pending = G.pending;
+  const myPending = pending && pending.playerID === playerID;
+  const canNormalPlay = !G.ended && !pending && G.playStage === playerID;
+
+  // 普通出牌与《梦》强制出牌采用「先选牌再确认」；其他待结算为点选即执行
+  const selectionMode = canNormalPlay || (myPending && pending.type === 'dream');
+  if (psSelected != null && (psSelected >= me.hand.length || !selectionMode)) {
+    psSelected = null;
+    psDreamTarget = '';
+  }
+
+  me.hand.forEach((card, index) => {
+    let onClick;
+    let dimmed = false;
+    let clickable = false;
+    if (myPending) {
+      const t = pending.type;
+      if (t === 'dream') {
+        if (!psLawAllows(G, card)) {
+          dimmed = true;
+        } else {
+          clickable = true;
+          onClick = () => {
+            psSelected = psSelected === index ? null : index;
+            renderGame(currentState);
+          };
+        }
+      } else if (t === 'secretReveal' || t === 'absoluteMine' || t === 'absoluteTheirs') {
+        clickable = true;
+        onClick = () => client.moves[{
+          secretReveal: 'resolveSecretReveal',
+          absoluteMine: 'resolveAbsoluteMine',
+          absoluteTheirs: 'resolveAbsoluteTheirs',
+        }[t]](index);
+      } else if (t === 'betrayalHand') {
+        clickable = true;
+        onClick = () => client.moves.resolveBetrayalHand(index);
+      } else if (t === 'angerHand') {
+        clickable = true;
+        onClick = () => client.moves.resolveAngerHand(index);
+      } else if (t === 'luck') {
+        const isFear = card.number === 12;
+        if (isFear) {
+          dimmed = true;
+        } else {
+          clickable = true;
+          onClick = () => client.moves.resolveLuck(index);
+        }
+      }
+    } else if (canNormalPlay) {
+      const allowed = psLawAllows(G, card);
+      if (allowed) {
+        clickable = true;
+        onClick = () => {
+          if (psSelected === index) {
+            psSelected = null;
+            psDreamTarget = '';
+          } else {
+            psSelected = index;
+            psDreamTarget = '';
+          }
+          renderGame(currentState);
+        };
+      } else {
+        dimmed = true;
+      }
+    }
+
+    const selected = selectionMode && psSelected === index;
+    container.appendChild(presagesCardNode(card, {
+      selected,
+      dimmed,
+      clickable,
+      onClick,
+    }));
+  });
+}
+
+/** Presages 卡牌详情。 */
+function psCardDetail(card) {
+  const meta = PRESAGES_COLOR_META[card.color] || PRESAGES_COLOR_META.green;
+  const children = [
+    el('div', { class: 'ps-detail-title', text: `${card.number}《${card.name}》 · ${meta.name}` }),
+    el('div', { class: 'ps-detail-text', text: card.effect }),
+  ];
+  if (card.note) {
+    children.push(el('div', { class: 'ps-detail-note', text: `注：${card.note}` }));
+  }
+  return el('div', { class: 'ps-detail', style: `--c:${meta.color}` }, children);
+}
+
+/** Presages 底部操作面板：普通出牌 / 待结算选择。 */
+function renderPresagesPanel(state) {
+  const G = state.G;
+  const playerID = state.playerID;
+  const container = $('#play-panel');
+  container.innerHTML = '';
+  const nicknames = nicknameMap();
+  const nameOf = (id) => nicknames.get(String(id)) || `玩家 ${id}`;
+
+  if (G.ended) {
+    container.appendChild(el('div', { class: 'ps-panel-hint', text: '本局已结束，可点击右上角「回到房间」开始新一局。' }));
+    return;
+  }
+
+  const pending = G.pending;
+  if (pending) {
+    const isActor = pending.playerID === playerID;
+    if (!isActor) {
+      container.appendChild(el('div', {
+        class: 'ps-panel-hint',
+        text: `等待 ${nameOf(pending.playerID)} 完成「${psPendingLabel(pending.type)}」…`,
+      }));
+      return;
+    }
+    container.appendChild(el('div', { class: 'ps-panel-title', text: psPendingLabel(pending.type) }));
+    if (pending.type === 'law') {
+      container.appendChild(el('div', { class: 'ps-panel-row' }, [
+        el('button', {
+          class: 'btn btn-sm',
+          text: '必须打出低于 15 的牌',
+          onClick: () => client.moves.resolveLaw('lower'),
+        }),
+        el('button', {
+          class: 'btn btn-sm',
+          text: '必须打出高于 15 的牌',
+          onClick: () => client.moves.resolveLaw('higher'),
+        }),
+      ]));
+    } else if (pending.type === 'secretTarget') {
+      container.appendChild(el('div', { class: 'ps-panel-hint', text: '选择一位玩家，由其选择一张手牌揭示：' }));
+      container.appendChild(el('div', { class: 'ps-panel-row' }, G.playOrder
+        .filter((id) => psHandCount(G, id) > 0)
+        .map((id) => el('button', {
+          class: 'btn btn-sm',
+          text: nameOf(id),
+          onClick: () => client.moves.resolveSecretTarget(id),
+        }))));
+    } else if (pending.type === 'secretViewer') {
+      container.appendChild(el('div', { class: 'ps-panel-hint', text: '选择揭示给谁看：' }));
+      container.appendChild(el('div', { class: 'ps-panel-row' }, G.playOrder.map((id) => el('button', {
+        class: `btn btn-sm ${id === playerID ? 'btn-primary' : ''}`,
+        text: id === playerID ? '自己' : nameOf(id),
+        onClick: () => client.moves.resolveSecretViewer(id),
+      }))));
+    } else if (pending.type === 'angerTarget') {
+      container.appendChild(el('div', { class: 'ps-panel-hint', text: '选择一位已出过牌的玩家：' }));
+      container.appendChild(el('div', { class: 'ps-panel-row' }, G.playOrder
+        .filter((id) => id !== playerID && G.field.some((e) => e.owner === id))
+        .map((id) => el('button', {
+          class: 'btn btn-sm',
+          text: nameOf(id),
+          onClick: () => client.moves.resolveAngerTarget(id),
+        }))));
+    } else if (pending.type === 'absoluteTarget') {
+      container.appendChild(el('div', { class: 'ps-panel-hint', text: '选择一位玩家交换一张手牌：' }));
+      container.appendChild(el('div', { class: 'ps-panel-row' }, G.playOrder
+        .filter((id) => id !== playerID && psHandCount(G, id) > 0)
+        .map((id) => el('button', {
+          class: 'btn btn-sm',
+          text: nameOf(id),
+          onClick: () => client.moves.resolveAbsoluteTarget(id),
+        }))));
+    } else if (pending.type === 'dream') {
+      const me = G.players[playerID];
+      const sel = psSelected != null && me && Array.isArray(me.hand) && psSelected < me.hand.length
+        ? me.hand[psSelected]
+        : null;
+      if (sel) {
+        container.appendChild(psCardDetail(sel));
+        container.appendChild(el('div', { class: 'ps-panel-row' }, [
+          el('button', {
+            class: 'btn btn-primary',
+            text: '确认打出',
+            onClick: () => {
+              const idx = psSelected;
+              psSelected = null;
+              client.moves.resolveDream(idx);
+            },
+          }),
+          el('button', {
+            class: 'btn btn-ghost',
+            text: '取消',
+            onClick: () => { psSelected = null; renderGame(currentState); },
+          }),
+        ]));
+      } else {
+        container.appendChild(el('div', { class: 'ps-panel-hint', text: '请选择一张手牌，立刻打在《梦》的拥有者面前。' }));
+      }
+    } else {
+      const hints = {
+        envy: '请点击任意玩家框中已打出的牌，与《嫉妒》交换位置。',
+        secretReveal: '请选择一张手牌向指定玩家揭示。',
+        angerField: '请点击你自己框中已打出的牌，将其收回手中。',
+        angerHand: '请选择一张手牌重新打出。',
+        betrayalHand: '请选择一张手牌用于交换。',
+        betrayalField: '请点击任意玩家框中已打出的牌完成交换。',
+        absoluteMine: '请选择一张自己的手牌。',
+        absoluteTheirs: '对方已选好手牌，请选择你要交换出的手牌。',
+        luck: '《运气》触发：请选择一张手牌弃掉（不能弃《恐惧》）。',
+      };
+      container.appendChild(el('div', { class: 'ps-panel-hint', text: hints[pending.type] || '请完成选择。' }));
+    }
+    return;
+  }
+
+  // 全员已出牌：展示结算预览，等待全员点击「结束回合」后才真正结算
+  if (G.turnConfirm) {
+    const confirmed = G.playOrder.filter((id) => G.turnConfirm[id]).length;
+    const total = G.playOrder.length;
+    const isPlayer = G.playOrder.includes(playerID);
+    const iConfirmed = isPlayer && !!G.turnConfirm[playerID];
+    container.appendChild(el('div', { class: 'ps-panel-hint', text: '全员已出牌，确认后结算本回合（可先查看各牌旁的结算预览）。' }));
+    if (isPlayer) {
+      container.appendChild(el('div', { class: 'ps-panel-row' }, [
+        el('button', {
+          class: `btn ${iConfirmed ? 'btn-ghost' : 'btn-primary'}`,
+          text: iConfirmed ? `已确认，等待其他玩家（${confirmed}/${total}）` : `结束回合（${confirmed}/${total}）`,
+          disabled: iConfirmed ? 'disabled' : false,
+          onClick: () => client.moves.confirmTurnEnd(),
+        }),
+      ]));
+    } else {
+      container.appendChild(el('div', { class: 'ps-panel-hint', text: `等待玩家确认结算（${confirmed}/${total}）。` }));
+    }
+    return;
+  }
+
+  if (G.playStage !== playerID) {
+    container.appendChild(el('div', { class: 'ps-panel-hint', text: `等待 ${nameOf(G.playStage)} 出牌…` }));
+    return;
+  }
+
+  const me = G.players[playerID];
+  const selectedCard = psSelected != null && me && Array.isArray(me.hand) ? me.hand[psSelected] : null;
+  if (!selectedCard) {
+    container.appendChild(el('div', { class: 'ps-panel-hint', text: '选择一张手牌准备打出（点击手牌查看效果）。' }));
+    return;
+  }
+
+  container.appendChild(psCardDetail(selectedCard));
+
+  // 《梦》放置目标
+  if (selectedCard.number === 21) {
+    const targets = [
+      { id: '', label: '打在自己面前（不启动效果）' },
+      ...G.playOrder
+        .filter((id) => id !== playerID && !G.playedSet[id])
+        .map((id) => ({ id, label: `打在 ${nameOf(id)} 面前` })),
+    ];
+    container.appendChild(el('div', { class: 'ps-panel-row ps-dream-row' }, targets.map((t) => el('button', {
+      class: `btn btn-sm ${psDreamTarget === t.id ? 'btn-primary' : ''}`,
+      text: t.label,
+      onClick: () => { psDreamTarget = t.id; renderGame(currentState); },
+    }))));
+  }
+
+  container.appendChild(el('div', { class: 'ps-panel-row' }, [
+    el('button', {
+      class: 'btn btn-primary',
+      text: '打出此牌',
+      onClick: () => {
+        const idx = psSelected;
+        const target = selectedCard.number === 21 ? psDreamTarget : '';
+        psSelected = null;
+        psDreamTarget = '';
+        client.moves.playCard(idx, target || '');
+      },
+    }),
+    el('button', {
+      class: 'btn btn-ghost',
+      text: '取消',
+      onClick: () => { psSelected = null; psDreamTarget = ''; renderGame(currentState); },
+    }),
+  ]));
+}
+
+/** 待结算类型的中文名。 */
+function psPendingLabel(type) {
+  return {
+    law: '《律法》宣言',
+    dream: '《梦》强制出牌',
+    envy: '《嫉妒》交换',
+    secretTarget: '《秘密》选择对象',
+    secretViewer: '《秘密》选择观看者',
+    secretReveal: '《秘密》揭示手牌',
+    angerTarget: '《愤怒》选择目标',
+    angerField: '《愤怒》收回旧牌',
+    angerHand: '《愤怒》重新出牌',
+    betrayalHand: '《背叛》选择手牌',
+    betrayalField: '《背叛》选择场上牌',
+    absoluteTarget: '《绝对》选择玩家',
+    absoluteMine: '《绝对》选择自己的手牌',
+    absoluteTheirs: '《绝对》对方选择手牌',
+    luck: '《运气》弃手牌',
+  }[type] || '待结算';
+}
+
+/** Presages 结算面板。 */
+function renderPresagesGameover(G) {
+  const box = $('#gameover');
+  if (!G.results) {
+    box.style.display = 'none';
+    box.innerHTML = '';
+    return;
+  }
+  const { winners, team, reason, teamWins } = G.results;
+  const nicknames = nicknameMap();
+  const color = PRESAGES_TEAM_COLORS[team] || '#d4a017';
+  const symbol = PRESAGES_TEAM_SYMBOLS[team] || '?';
+  box.style.display = 'block';
+  box.innerHTML = '';
+  box.appendChild(el('h2', { text: '游戏结束' }));
+  box.appendChild(el('p', { class: 'go-summary', style: `--tc:${color}` }, [
+    el('span', { class: 'ps-win-team', text: `小队${symbol}获胜` }),
+    el('span', { text: ` · ${reason}` }),
+  ]));
+  box.appendChild(el('div', { class: 'go-scores' }, [
+    el('div', { class: 'go-row' }, [
+      el('span', { class: 'ps-go-label', text: '获胜成员：' }),
+      ...winners.flatMap((w, i) => (i === 0
+        ? [playerNameNode(w, nicknames)]
+        : [el('span', { text: '、' }), playerNameNode(w, nicknames)])),
+    ]),
+    el('div', { class: 'go-row' }, [
+      el('span', { class: 'ps-go-label', text: '各队轮次：' }),
+      ...Object.keys(teamWins).map((t) => el('span', {
+        class: 'ps-go-team',
+        style: `--tc:${PRESAGES_TEAM_COLORS[t] || '#888'}`,
+        text: `小队${PRESAGES_TEAM_SYMBOLS[t] || '?'} ${teamWins[t]} 轮`,
+      })),
+    ]),
+  ]));
+  box.appendChild(backToLobbyButton());
+}
+
+function renderPresages(state) {
+  if (!state) return;
+  currentState = state;
+  const G = state.G;
+  renderPresagesTable(state);
+  renderPresagesPlayers(state);
+  renderPresagesHand(state);
+  renderPresagesPanel(state);
+  renderLog(G);
+  renderPresagesGameover(G);
+}
+
 const GAME_RENDERERS = {
   [QuancGame.name]: renderQuanc,
   [Red7Game.name]: renderRed7,
   [RegicideGame.name]: renderRegicide,
+  [PresagesGame.name]: renderPresages,
 };
 
 // ---------- 卡牌飞行动画（FLIP：First / Last / Invert / Play） ----------
@@ -1743,6 +2340,19 @@ function regicideCardLocations(G) {
   return map;
 }
 
+/** Presages：自己手牌 + 场上所有牌；弃牌堆不渲染。 */
+function presagesCardLocations(G) {
+  const map = new Map();
+  for (const id of Object.keys(G.players || {})) {
+    const p = G.players[id];
+    if (Array.isArray(p.hand)) for (const c of p.hand) map.set(c.id, 'hand');
+  }
+  if (Array.isArray(G.field)) {
+    for (const e of G.field) map.set(e.card.id, `field:${e.owner}`);
+  }
+  return map;
+}
+
 /** 摸牌飞入动画的起点锚点：手牌区上方（牌堆方向），无手牌区时退回视口顶部中央。 */
 function deckAnchorRect() {
   const hand = $('#hand');
@@ -1763,6 +2373,7 @@ function renderGame(state) {
   const locFns = {
     [Red7Game.name]: red7CardLocations,
     [RegicideGame.name]: regicideCardLocations,
+    [PresagesGame.name]: presagesCardLocations,
   };
   const locFn = (currentGame && locFns[currentGame.game.name]) || quancCardLocations;
   const currLocs = locFn(G);
@@ -1896,13 +2507,14 @@ function renderLobby(state) {
   const readyMap = (state.G && state.G.lobby && state.G.lobby.ready) || {};
   const filledSeats = seats.filter(s => s.name);
   const joined = filledSeats.length;
-  // 房间固定 5 个座位，只需检查已加入的玩家：2 人以上且全员在线、就位即可开局
+  // 不同游戏最少开局人数不同（如 Presages 需要 4 人）
+  const minStart = Math.max(2, (currentGame && currentGame.game && currentGame.game.minPlayers) || 2);
   const allOnline = filledSeats.every(s => s.isConnected === true);
   const allReady = filledSeats.every(s => readyMap[String(s.id)]);
-  const canStart = joined >= 2 && allOnline && allReady;
+  const canStart = joined >= minStart && allOnline && allReady;
   const isHost = roomInfo && roomInfo.playerID === '0';
 
-  countEl.textContent = `玩家 ${joined}/${total} · ${canStart ? '全员就位，可以开局' : joined < 2 ? '至少 2 人开局' : '等待就位'}`;
+  countEl.textContent = `玩家 ${joined}/${total} · ${canStart ? '全员就位，可以开局' : joined < minStart ? `至少 ${minStart} 人开局` : '等待就位'}`;
 
   seats.forEach(s => {
     const filled = Boolean(s.name);
@@ -1935,12 +2547,12 @@ function renderLobby(state) {
     ]));
   });
 
-  if (joined < 2) {
+  if (joined < minStart) {
     actionEl.appendChild(el('div', {
       class: 'room-hint',
       text: isHost
-        ? `至少还需 ${2 - joined} 名玩家，把对局 ID 发给好友加入吧。`
-        : `等待其他玩家加入…（${joined}/${total}，至少 2 人开局）`,
+        ? `至少还需 ${minStart - joined} 名玩家，把对局 ID 发给好友加入吧。`
+        : `等待其他玩家加入…（${joined}/${total}，至少 ${minStart} 人开局）`,
     }));
   } else if (!allOnline) {
     actionEl.appendChild(el('div', { class: 'room-hint', text: '有玩家连接中断，等待重新连接…' }));
@@ -2146,6 +2758,7 @@ function showGameScreen() {
     inGameScreen = true;
     resetRed7Selection();
     resetRegicideSelection();
+    resetPresagesSelection();
     mountGameTemplate(currentGame);
     $('#library').style.display = 'none';
     $('#setup').style.display = 'none';

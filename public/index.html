@@ -157,6 +157,29 @@
     </footer>
   </template>
 
-  <script src="client.js?v=47"></script>
+  <!-- Presages 游戏界面模板 -->
+  <template id="template-presages">
+    <div class="game-layout">
+      <!-- 上方：轮次 / 队伍 / 场上 -->
+      <main class="table-wrap">
+        <div id="table" class="table"></div>
+      </main>
+
+      <!-- 下方：各玩家区域 -->
+      <aside id="players" class="players"></aside>
+
+      <!-- 日志区域（已通过 CSS 隐藏，保留节点） -->
+      <aside id="log" class="log"></aside>
+    </div>
+
+    <!-- 底部：手牌与行动 -->
+    <footer class="hand-wrap">
+      <div class="section-label section-label-hand">手牌区</div>
+      <div id="hand" class="hand"></div>
+      <div id="play-panel" class="play-panel"></div>
+    </footer>
+  </template>
+
+  <script src="client.js?v=70"></script>
 </body>
 </html>
