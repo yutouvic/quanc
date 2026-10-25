@@ -309,6 +309,8 @@ function freshQuancG(ctx, random, logLine) {
     turnDrawCount: 0,
     turnPlayCount: 0,
     turnUsed: { own: false, opponent: false, table: false },
+    turnActions: [],  // 本回合已执行的操作（出牌/刺客移除），用于撤回
+    undoCount: {},    // 各玩家已用撤回次数（上限 3 次/人/局）
     lobby: { ready: {}, started: false },
     ended: false,
     results: null, // 结算数据（获胜者/得分/任务/家族宠辱），结束时写入
@@ -392,6 +394,8 @@ export const QuancGame = {
             }
             G.playOrder = participants;
             G.playerCount = count;
+            // 初始化各玩家撤回次数
+            participants.forEach(id => { G.undoCount[id] = 0; });
             // 记录 play 阶段起始回合基准：房间重开后 ctx.turn 不会归零，
             // 轮次计算须以本次开局时的回合数为基准
             G.turnBase = ctx.turn;
@@ -447,6 +451,7 @@ export const QuancGame = {
           // 轮次 = floor((当前回合 - 基准) / 实际人数) + 1
           G.round = Math.floor((ctx.turn - G.turnBase) / numPlayers) + 1;
           G.pendingAssassin = null;
+          G.turnActions = [];
 
           if (G.deck.length === 0) {
             // 牌堆已空且所有玩家无手牌 → 触发结束
@@ -492,12 +497,11 @@ export const QuancGame = {
           G.log.push(`玩家 ${pLabel(playerID)} 回合开始，摸 ${n} 张牌。`);
         },
 
-        // 本回合应打的牌都打出、且没有待结算的刺客效果时，自动结束回合
-        // （本局已结束 / 状态已被 backToLobby 重置后冻结当前回合，不再轮转：
-        //   重置后 turnDrawCount=turnPlayCount=0，若不加守卫 0>=0 恒真，
-        //   会在 setPhase('lobby') 生效前误推进回合并给下一玩家发牌）
+        // 仅当牌堆已空、无牌可摸时自动结束回合（此时玩家无牌可打，无需手动操作）；
+        // 正常回合需玩家手动点击「结束回合」按钮。
+        // （本局已结束 / 状态已被 backToLobby 重置后冻结当前回合，不再轮转）
         endIf: ({ G, ctx }) => ctx.phase === 'play' && G.lobby?.started && !G.ended
-          && G.turnPlayCount >= G.turnDrawCount && !G.pendingAssassin,
+          && G.turnDrawCount === 0 && !G.pendingAssassin,
       },
     },
   },
@@ -559,6 +563,7 @@ export const QuancGame = {
         }
 
         G.turnPlayCount += 1;
+        G.turnActions.push({ type: 'play', card, location });
 
         // 刺客：打出后进入待结算状态
         if (card.type === 'assassin') {
@@ -574,7 +579,10 @@ export const QuancGame = {
      * @param {number} targetIndex - 目标牌在该区域数组中的索引；传 -1 / null 表示不发动。
      * 规则：任何情况下都可选择不发动；发动时可移除区域内除刺客自身与守卫外的任意 1 张牌。
      */
-    resolveAssassin: ({ G, ctx, playerID }, targetIndex) => {
+    resolveAssassin: {
+      // 仅服务端结算：客户端 playerView 不含 turnActions，乐观更新会导致 push 报错
+      client: false,
+      move: ({ G, ctx, playerID }, targetIndex) => {
       if (ctx.phase !== 'play') return INVALID_MOVE;
       if (G.ended) return INVALID_MOVE; // 本局已结束，等待返回房间
       if (playerID !== ctx.currentPlayer) return INVALID_MOVE;
@@ -597,9 +605,80 @@ export const QuancGame = {
 
       area.splice(targetIndex, 1);
       G.discard.push(targetCard);
+      G.turnActions.push({ type: 'assassinRemove', card: targetCard, location: pending.location, index: targetIndex });
       G.pendingAssassin = null;
-      G.log.push(`玩家 ${pLabel(playerID)} 的刺客移除了 1 张牌（移出本局）。`);
-      return undefined;
+        G.log.push(`玩家 ${pLabel(playerID)} 的刺客移除了 1 张牌（移出本局）。`);
+        return undefined;
+      },
+    },
+
+    /**
+     * 手动结束回合：需已打出全部手牌且无待结算刺客效果。
+     */
+    endTurn: {
+      client: false,
+      move: ({ G, ctx, playerID, events }) => {
+        if (ctx.phase !== 'play') return INVALID_MOVE;
+        if (G.ended) return INVALID_MOVE;
+        if (playerID !== ctx.currentPlayer) return INVALID_MOVE;
+        if (G.pendingAssassin) return INVALID_MOVE;
+        if (G.turnPlayCount < G.turnDrawCount) return INVALID_MOVE;
+        G.log.push(`玩家 ${pLabel(playerID)} 结束回合。`);
+        events.endTurn();
+        return undefined;
+      },
+    },
+
+    /**
+     * 撤回本回合全部操作：收回所有已打出的牌，恢复刺客移除的牌。
+     * 每名玩家每局至多 3 次。
+     */
+    undoTurn: {
+      client: false,
+      move: ({ G, ctx, playerID }) => {
+        if (ctx.phase !== 'play') return INVALID_MOVE;
+        if (G.ended) return INVALID_MOVE;
+        if (playerID !== ctx.currentPlayer) return INVALID_MOVE;
+        if (G.turnPlayCount === 0) return INVALID_MOVE;
+        const used = G.undoCount[playerID] || 0;
+        if (used >= 3) return INVALID_MOVE;
+
+        const player = G.players[playerID];
+        // 清除未结算的刺客效果
+        G.pendingAssassin = null;
+
+        // 逆序撤回本回合所有操作
+        for (let i = G.turnActions.length - 1; i >= 0; i--) {
+          const action = G.turnActions[i];
+          if (action.type === 'play') {
+            // 从目标区域找回卡牌，放回手中
+            const area = areaArray(G, action.location);
+            if (area) {
+              const idx = area.findIndex(c => c.id === action.card.id);
+              if (idx >= 0) {
+                area.splice(idx, 1);
+                player.hand.push(action.card);
+              }
+            }
+          } else if (action.type === 'assassinRemove') {
+            // 从弃牌堆找回被移除的牌，放回原位置
+            const didx = G.discard.findIndex(c => c.id === action.card.id);
+            if (didx >= 0) {
+              G.discard.splice(didx, 1);
+              const area = areaArray(G, action.location);
+              if (area) area.splice(action.index, 0, action.card);
+            }
+          }
+        }
+
+        G.turnActions = [];
+        G.turnPlayCount = 0;
+        G.turnUsed = { own: false, opponent: false, table: false };
+        G.undoCount[playerID] = used + 1;
+        const left = 3 - used - 1;
+        G.log.push(`玩家 ${pLabel(playerID)} 撤回了本回合操作（剩余 ${left} 次撤回机会）。`);
+        return undefined;
+      },
     },
 
     /**
@@ -649,6 +728,7 @@ export const QuancGame = {
         disfavored: G.table.disfavored.map(c => maskCard(c, ended)),
       },
       discard: G.discard.map(c => maskCard(c, ended)),
+      turnActions: undefined, // 服务端内部状态，不下发（含未遮罩的卡牌信息）
     };
   },
 };

@@ -79,7 +79,7 @@
     0 0 14px color-mix(in srgb, var(--c) 55%, transparent);
 }
 .card-fam {
-  font-size: 13px; font-weight: 700; letter-spacing: 1px;
+  font-size: 13px; font-weight: 500; letter-spacing: 1px;
   position: relative; z-index: 1; text-shadow: 0 1px 2px rgba(0,0,0,0.6);
 }
 .card-type {
@@ -125,11 +125,11 @@
   width: var(--mini-w); height: var(--mini-h);
   padding: 1px; border-radius: 7px;
 }
-.card-mini .card-frame { border-radius: 6px; gap: 1px; }
-.card-mini .card-emblem { width: 30px; height: 30px; font-size: 19px; }
-.card-mini .card-fam { font-size: 8px; letter-spacing: 0.5px; }
-.card-mini .card-type { font-size: 7px; padding: 0 4px; gap: 1px; line-height: 1.4; }
-.card-mini .card-type .ico { font-size: 7px; }
+.card-mini .card-frame { border-radius: 6px; gap: 2px; }
+.card-mini .card-emblem { width: 22px; height: 22px; font-size: 13px; }
+.card-mini .card-fam { font-size: 10px; letter-spacing: 0.5px; font-weight: 500; }
+.card-mini .card-type { font-size: 9px; padding: 0 5px; gap: 1px; line-height: 1.5; }
+.card-mini .card-type .ico { font-size: 9px; }
 .card-mini .card-weight { top: -3px; right: -3px; font-size: 7px; padding: 0 3px; }
 .card-mini:hover { transform: translateY(-3px); }
 .card-disabled { opacity: 0.45; cursor: not-allowed; }
@@ -262,7 +262,9 @@
 @media (max-width: 768px) {
   /* 卡牌与小牌内容同步缩小 */
   .card-emblem { width: 46px; height: 46px; font-size: 31px; }
-  .card-mini .card-emblem { width: 27px; height: 27px; font-size: 17px; }
+  .card-mini .card-emblem { width: 20px; height: 20px; font-size: 12px; }
+  .card-mini .card-fam { font-size: 9px; }
+  .card-mini .card-type { font-size: 8px; }
 
   /* 餐桌板收紧：7 列在小屏保持等分可放下 */
   .board-side { width: 20px; }
@@ -276,7 +278,9 @@
   .card-fam { font-size: 12px; }
   .card-type { font-size: 10px; }
   .card-emblem { width: 42px; height: 42px; font-size: 28px; }
-  .card-mini .card-emblem { width: 24px; height: 24px; font-size: 16px; }
+  .card-mini .card-emblem { width: 18px; height: 18px; font-size: 11px; }
+  .card-mini .card-fam { font-size: 8px; }
+  .card-mini .card-type { font-size: 7px; padding: 0 4px; }
 
   /* 任务面板：2 个任务同一行，文字必要时换行 */
   .task-panel { flex-wrap: nowrap; }

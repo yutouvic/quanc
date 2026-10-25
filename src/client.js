@@ -31,7 +31,7 @@ let prevEnded = false;       // 上一帧是否已结束（用于一次性触发
 let justEnded = false;       // 本帧是否为游戏结束瞬间
 let prevCardLocations = new Map(); // 上一帧的「卡牌 id → 逻辑位置」映射，用于 diff 出移动/新增/消失以播放飞行动画
 const loadedCSS = new Set(); // 已动态加载的游戏 CSS 路径（去重）
-const CSS_VERSION = '26';     // CSS 版本号：样式更新时递增，防止浏览器缓存旧样式
+const CSS_VERSION = '28';     // CSS 版本号：样式更新时递增，防止浏览器缓存旧样式
 let rgSelected = [];         // Regicide 手牌多选索引（连招 / 承伤弃牌共用）
 let prevRgForced = false;    // Regicide 上一帧是否处于强制结算（用于自动定位只触发一次）
 
@@ -470,7 +470,7 @@ function renderAssassinPanel(state) {
   panel.appendChild(el('div', { class: 'assassin-candidates' }, cand));
   // 任何情况下都允许不发动
   panel.appendChild(el('button', {
-    class: 'btn btn-sm', text: '不发动', disabled: isActive ? false : 'disabled',
+    class: 'btn btn-sm', text: '不发动刺客', disabled: isActive ? false : 'disabled',
     onClick: () => client.moves.resolveAssassin(-1),
   }));
 }
@@ -486,9 +486,34 @@ function renderPlayPanel(state) {
 
   if (G.results) return;
 
+  /** 构建「撤回 / 结束回合」按钮行（当前回合玩家可见） */
+  const buildTurnActions = () => {
+    const undoUsed = (G.undoCount && G.undoCount[playerID]) || 0;
+    const undoLeft = 3 - undoUsed;
+    const remaining = G.turnDrawCount - G.turnPlayCount;
+    const actions = el('div', { class: 'turn-actions' });
+    if (G.turnPlayCount > 0) {
+      actions.appendChild(el('button', {
+        class: 'btn btn-sm btn-undo',
+        text: `↩ 撤回（剩 ${undoLeft} 次）`,
+        disabled: undoLeft <= 0 ? 'disabled' : false,
+        onClick: () => client.moves.undoTurn(),
+      }));
+    }
+    if (remaining <= 0) {
+      actions.appendChild(el('button', {
+        class: 'btn btn-sm btn-primary',
+        text: '结束回合',
+        onClick: () => client.moves.endTurn(),
+      }));
+    }
+    return actions;
+  };
+
   // 有待结算的刺客效果，且仅当前操作玩家可见并结算；其他玩家仅提示等待
   if (forced) {
     renderAssassinPanel(state);
+    if (isActive) panel.appendChild(buildTurnActions());
     return;
   }
 
@@ -503,12 +528,14 @@ function renderPlayPanel(state) {
   const me = G.players[playerID];
   const hand = Array.isArray(me.hand) ? me.hand : [];
   if (hand.length === 0) {
-    panel.appendChild(el('div', { class: 'empty-hint', text: '本回合出牌已完成，等待回合结束。' }));
+    panel.appendChild(el('div', { class: 'empty-hint', text: '本回合出牌已完成。' }));
+    panel.appendChild(buildTurnActions());
     return;
   }
 
   if (selectedIndex == null || selectedIndex >= hand.length) {
     panel.appendChild(el('div', { class: 'empty-hint', text: `本回合还需打出 ${remaining} 张，请先点击一张手牌选择。` }));
+    panel.appendChild(buildTurnActions());
     return;
   }
 
@@ -555,6 +582,7 @@ function renderPlayPanel(state) {
       onClick: () => play('table', 'disfavored'),
     }),
   ]));
+  panel.appendChild(buildTurnActions());
 }
 
 function renderLog(G) {

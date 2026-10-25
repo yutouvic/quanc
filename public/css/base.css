@@ -300,6 +300,20 @@ label input, label select {
 .dest-title { font-size: 12px; opacity: 0.7; min-width: 96px; }
 .dest-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
 
+/* 回合操作按钮行（撤回 / 结束回合） */
+.turn-actions {
+  display: flex; gap: 8px; flex-wrap: wrap;
+  padding-top: 6px; border-top: 1px solid rgba(255,255,255,0.08);
+  margin-top: 4px;
+}
+.btn-undo {
+  border-color: rgba(255,193,7,0.5) !important;
+  color: #ffc107 !important;
+}
+.btn-undo:hover:not(:disabled) {
+  background: rgba(255,193,7,0.12) !important;
+}
+
 /* ========== 结束结算（通用） ========== */
 .gameover-box {
   background: rgba(212,160,23,0.14); border: 1px solid #d4a017;
