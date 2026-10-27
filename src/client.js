@@ -5,6 +5,8 @@
 
 import { Client } from 'boardgame.io/client';
 import { SocketIO } from 'boardgame.io/multiplayer';
+import { driver } from 'driver.js';
+import 'driver.js/dist/driver.css';
 import { QuancGame, computeFamilyFates, pLabel, getTask } from './quanc.js';
 import { Red7Game, RED7_COLORS, computeWinningIds, ruleKeyCards, effectiveRuleIndex } from './red7.js';
 import { RegicideGame, RG_SUITS, rgDiscardValue } from './regicide.js';
@@ -38,11 +40,13 @@ let prevEnded = false;       // 上一帧是否已结束（用于一次性触发
 let justEnded = false;       // 本帧是否为游戏结束瞬间
 let prevCardLocations = new Map(); // 上一帧的「卡牌 id → 逻辑位置」映射，用于 diff 出移动/新增/消失以播放飞行动画
 const loadedCSS = new Set(); // 已动态加载的游戏 CSS 路径（去重）
-const CSS_VERSION = '45';     // CSS 版本号：样式更新时递增，防止浏览器缓存旧样式
+const CSS_VERSION = '49';     // CSS 版本号：样式更新时递增，防止浏览器缓存旧样式
 let rgSelected = [];         // Regicide 手牌多选索引（连招 / 承伤弃牌共用）
 let prevRgForced = false;    // Regicide 上一帧是否处于强制结算（用于自动定位只触发一次）
 let psSelected = null;       // Presages 当前选中的手牌索引
 let psDreamTarget = '';      // Presages 《梦》的放置目标（空串表示打在自己面前）
+let assassinGuide = null;        // 刺客区域引导的 Driver.js 实例（仅当前操作玩家可见）
+let assassinGuideDismissed = ''; // 已手动关闭引导的刺客（assassinCardId），同一待结算不再自动弹出
 
 /** 当前游戏的 boardgame.io 名称（大厅路由键），未选择时为空串。 */
 function gameName() {
@@ -324,6 +328,7 @@ function renderPlayers(G, ctx, playerID, fates) {
     const node = el('div', {
       class: `territory ${isCurrent ? 'active' : ''} ${isMe ? 'me' : ''}`,
       'data-turn-text': turnText,
+      'data-player-id': id, // 刺客结算时按座位定位领地容器
     }, [
       el('div', { class: 'territory-head' }, [
         el('span', { class: 'territory-name' }, [playerNameNode(id, nicknames, { me: isMe })]),
@@ -369,8 +374,9 @@ function renderTable(G, fates) {
   const gridStyle = `grid-template-columns: repeat(${cols.length}, minmax(0, 1fr))`;
 
   // 得宠（上）/ 失宠（下）牌行；得宠列 wrap-reverse 向上叠放，失宠列正常向下叠放
+  // data-zone 用于刺客结算时定位目标区域行
   const cardsRow = (zoneKey, sideText, sideCls) =>
-    el('div', { class: 'board-row' }, [
+    el('div', { class: 'board-row', 'data-zone': zoneKey }, [
       el('div', { class: `board-side ${sideCls}` }, [el('span', { text: sideText })]),
       el('div', { class: 'board-grid', style: gridStyle }, cols.map((col) => {
         const cls = ['board-col', `board-col-${zoneKey}`];
@@ -386,7 +392,7 @@ function renderTable(G, fates) {
       return el('div', { class: 'board-head-cell board-head-spy' }, [
         el('span', { class: 'chip-icon' }, [svgNode(TYPE_ICONS.spy)]),
         el('span', { class: 'board-head-name', text: '间谍' }),
-        el('span', { class: 'fate-badge board-head-sub', text: '未翻开' }),
+        el('span', { class: 'fate-badge board-head-sub', text: '' }),
       ]);
     }
     const f = col.family;
@@ -436,7 +442,7 @@ function renderHand(G, playerID, active) {
   });
 }
 
-/** 刺客结算面板 */
+/** 刺客结算面板（仅文案与「不发动」按钮；目标牌直接在触发区域点击） */
 function renderAssassinPanel(state) {
   const { G, ctx, playerID } = state;
   const isActive = !G.results && ctx.currentPlayer === playerID;
@@ -454,34 +460,149 @@ function renderAssassinPanel(state) {
     areaName = pending.location.zone === 'favored' ? '餐桌·得宠区' : '餐桌·失宠区';
   }
 
-  // 候选牌：排除刺客自身；守卫免疫；间谍（牌背）同样可被移除
-  const entries = [];
-  area.forEach((c, idx) => {
-    if (c.id === pending.assassinCardId) return; // 不能移除刺客自身
-    entries.push({ card: c, idx, removable: c.type !== 'guard' });
-  });
-  const removableCount = entries.filter(e => e.removable).length;
+  // 可移除目标数：排除刺客自身；守卫免疫；间谍（牌背）同样可被移除
+  const removableCount = area.filter(c => c.id !== pending.assassinCardId && c.type !== 'guard').length;
 
   panel.appendChild(el('div', {
     class: 'assassin-title',
     text: removableCount > 0
-      ? `🗡️ 刺客效果：可移除【${areaName}】中的 1 张牌（守卫免疫），也可选择不发动。`
+      ? `🗡️ 刺客效果：点击【${areaName}】中发光的 1 张牌将其移除（守卫免疫），也可不发动。`
       : `🗡️ 刺客效果：【${areaName}】中没有可移除的牌，可选择不发动。`,
   }));
-  const cand =
-    entries.length === 0
-      ? [el('span', { class: 'empty-hint', text: '该区域无可移除的牌' })]
-      : entries.map(({ card, idx, removable }) => miniCardNode(card, {
-          disabled: !removable,
-          title: removable ? '点击移除该牌' : '守卫免疫，无法被移除',
-          onClick: isActive && removable ? () => client.moves.resolveAssassin(idx) : undefined,
-        }));
-  panel.appendChild(el('div', { class: 'assassin-candidates' }, cand));
   // 任何情况下都允许不发动
   panel.appendChild(el('button', {
     class: 'btn btn-sm', text: '不发动刺客', disabled: isActive ? false : 'disabled',
     onClick: () => client.moves.resolveAssassin(-1),
   }));
+}
+
+/** 销毁刺客区域引导（Driver.js 高亮层）。 */
+function disarmAssassinGuide() {
+  if (assassinGuide) {
+    assassinGuide.destroy();
+    assassinGuide = null;
+  }
+}
+
+/**
+ * 刺客待结算且轮到当前玩家时：
+ * - 用 Driver.js 高亮触发区域（领地整块 / 餐桌得宠或失宠行），弹窗指引点击移除目标；
+ * - 区域内可移除的牌加发光脉冲并绑定点击（守卫与刺客自身则弱化置灰）。
+ * 每次渲染后重挂；弹窗的「不发动刺客」与面板按钮等价。
+ */
+function armAssassinArea(state) {
+  const { G, ctx, playerID } = state;
+  const pending = G.pendingAssassin;
+  const isActive = !G.results && !G.ended && !!pending && ctx.currentPlayer === playerID;
+  disarmAssassinGuide();
+  if (!isActive) {
+    if (!pending) assassinGuideDismissed = '';
+    return;
+  }
+
+  let areaEl = null;
+  let area = [];
+  let areaName = '';
+  let side = 'top';
+  if (pending.location.kind === 'territory') {
+    areaEl = document.querySelector(`#players .territory[data-player-id="${pending.location.owner}"]`);
+    area = (G.players[pending.location.owner] && G.players[pending.location.owner].territory) || [];
+    areaName = pending.location.owner === playerID ? '你的领地' : `玩家 ${pLabel(pending.location.owner)} 的领地`;
+  } else {
+    areaEl = document.querySelector(`#table .board-row[data-zone="${pending.location.zone}"]`);
+    area = G.table[pending.location.zone] || [];
+    areaName = pending.location.zone === 'favored' ? '餐桌·得宠区' : '餐桌·失宠区';
+    side = 'bottom';
+  }
+  if (!areaEl) return;
+
+  // 区域内卡牌按 data-card-id 映射回数组索引，绑定移除点击
+  const indexById = new Map(area.map((c, i) => [c.id, i]));
+  let removableCount = 0;
+  for (const node of areaEl.querySelectorAll('[data-card-id]')) {
+    const idx = indexById.get(node.getAttribute('data-card-id'));
+    if (idx == null) continue;
+    const card = area[idx];
+    if (card.id === pending.assassinCardId || card.type === 'guard') {
+      node.classList.add('assassin-immune');
+      node.title = card.type === 'guard' ? '守卫免疫，无法被移除' : '刺客自身不可移除';
+      continue;
+    }
+    removableCount += 1;
+    node.classList.add('assassin-target');
+    node.setAttribute('role', 'button');
+    node.setAttribute('tabindex', '0');
+    node.title = '点击移除该牌';
+    const remove = () => client.moves.resolveAssassin(idx);
+    node.addEventListener('click', remove);
+    node.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); remove(); }
+    });
+  }
+  // 无可移除目标，或玩家已关闭本次引导：仅保留卡牌标记，不再弹高亮层
+  if (removableCount === 0 || assassinGuideDismissed === pending.assassinCardId) return;
+
+  assassinGuide = driver({
+    allowClose: true,
+    allowKeyboardControl: false, // 只能点弹窗按钮关闭，避免 Esc 绕过「不发动」记录
+    overlayOpacity: 0.72,
+    stagePadding: 8,
+    stageRadius: 10,
+    popoverClass: 'quanc-assassin-popover',
+    showButtons: ['next', 'close'],
+    closeBtnLabel: '关闭弹窗',
+    overlayClickBehavior: 'none',
+    steps: [{
+      element: areaEl,
+      popover: {
+        title: '🗡️ 刺客效果',
+        description: `点击【${areaName}】中发光的 1 张牌将其移除（守卫免疫、刺客自身不可移除）。`,
+        side,
+        align: 'center',
+        nextBtnText: '不发动刺客',
+        onNextClick: () => {
+          client.moves.resolveAssassin(-1);
+          disarmAssassinGuide();
+        },
+      },
+    }],
+    onCloseClick: () => {
+      assassinGuideDismissed = pending.assassinCardId;
+      disarmAssassinGuide();
+    },
+    onDestroyed: () => { assassinGuide = null; },
+  });
+  assassinGuide.drive();
+  // 弹窗可拖拽移动，避免遮挡高亮区域后方内容
+  makeAssassinPopoverDraggable();
+}
+
+/** 让刺客引导弹窗可按住标题栏拖动（Driver.js 无原生拖拽支持）。 */
+function makeAssassinPopoverDraggable() {
+  const pop = document.querySelector('.driver-popover.quanc-assassin-popover');
+  if (!pop) return;
+  const handle = pop.querySelector('.driver-popover-title') || pop;
+  handle.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('button')) return;
+    const rect = pop.getBoundingClientRect();
+    const dx = e.clientX - rect.left;
+    const dy = e.clientY - rect.top;
+    const onMove = (ev) => {
+      pop.classList.add('popover-dragged'); // 拖动后箭头指向已失真，隐藏
+      pop.style.position = 'fixed';
+      pop.style.margin = '0';
+      pop.style.transform = 'none';
+      pop.style.left = `${Math.max(4, Math.min(window.innerWidth - rect.width - 4, ev.clientX - dx))}px`;
+      pop.style.top = `${Math.max(4, Math.min(window.innerHeight - rect.height - 4, ev.clientY - dy))}px`;
+    };
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    e.preventDefault();
+  });
 }
 
 function renderPlayPanel(state) {
@@ -649,11 +770,24 @@ function backToLobbyButton() {
   });
 }
 
+let gameoverScrolled = false; // 结算面板是否已自动滚动到位（每局仅滚动一次）
+
+/** 本局结算面板首次出现时，自动把玩家视角移到顶部的结束面板。 */
+function scrollToGameover(box) {
+  if (gameoverScrolled) return;
+  gameoverScrolled = true;
+  // 等本帧 DOM 写入完成后再滚动，确保面板高度已确定
+  requestAnimationFrame(() => {
+    box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+}
+
 function renderGameover(G) {
   const box = $('#gameover');
   if (!G.results) {
     box.style.display = 'none';
     box.innerHTML = '';
+    gameoverScrolled = false;
     return;
   }
   const { winners, scores, territoryScores, taskResults, fates } = G.results;
@@ -692,6 +826,7 @@ function renderGameover(G) {
   });
   box.appendChild(el('div', { class: 'fate-row' }, fateRows));
   box.appendChild(backToLobbyButton());
+  scrollToGameover(box);
 }
 
 function renderQuanc(state) {
@@ -710,6 +845,8 @@ function renderQuanc(state) {
   renderPlayPanel(state);
   renderLog(G);
   renderGameover(G);
+  // 刺客待结算：高亮触发区域并武装可移除牌（须在 DOM 全量重建后执行）
+  armAssassinArea(state);
 }
 
 // ---------- Red7 渲染 ----------
@@ -743,10 +880,13 @@ function resetGameUIState() {
   resetRed7Selection();
   resetRegicideSelection();
   resetPresagesSelection();
+  disarmAssassinGuide();
+  assassinGuideDismissed = '';
   seenCardIds.clear();
   prevEnded = false;
   justEnded = false;
   prevCardLocations = new Map(); // 清空牌位置快照，新一局首次渲染不播放飞行动画
+  gameoverScrolled = false; // 新一局允许结算面板再次自动滚动
 }
 
 /** Red7 卡牌节点：数字 + 颜色底；keyColor 用于关键牌脉冲特效（跟随当前规则色）。 */
@@ -1189,6 +1329,7 @@ function renderRed7Gameover(G) {
   if (!G.results) {
     box.style.display = 'none';
     box.innerHTML = '';
+    gameoverScrolled = false;
     return;
   }
   const nicknames = nicknameMap();
@@ -1202,6 +1343,7 @@ function renderRed7Gameover(G) {
       : [el('span', { text: '、' }), playerNameNode(w, nicknames)])),
   ]));
   box.appendChild(backToLobbyButton());
+  scrollToGameover(box);
 }
 
 /** Red7 统一渲染。 */
@@ -1678,6 +1820,7 @@ function renderRegicideGameover(G) {
   if (!G.results) {
     box.style.display = 'none';
     box.innerHTML = '';
+    gameoverScrolled = false;
     return;
   }
   box.style.display = 'block';
@@ -1687,6 +1830,7 @@ function renderRegicideGameover(G) {
   box.appendChild(el('p', { class: 'go-summary', text: G.results.reason }));
   box.appendChild(el('p', { class: 'go-summary', text: `本次共击败 ${G.slain.length}/12 个敌人。` }));
   box.appendChild(backToLobbyButton());
+  scrollToGameover(box);
 }
 
 /** Regicide 统一渲染。 */
@@ -2246,6 +2390,7 @@ function renderPresagesGameover(G) {
   if (!G.results) {
     box.style.display = 'none';
     box.innerHTML = '';
+    gameoverScrolled = false;
     return;
   }
   const { winners, team, reason, teamWins } = G.results;
@@ -2276,6 +2421,7 @@ function renderPresagesGameover(G) {
     ]),
   ]));
   box.appendChild(backToLobbyButton());
+  scrollToGameover(box);
 }
 
 function renderPresages(state) {
@@ -2839,9 +2985,12 @@ function resetToLibrary(message) {
   currentGame = null;
   resetRed7Selection();
   resetRegicideSelection();
+  disarmAssassinGuide();
+  assassinGuideDismissed = '';
   seenCardIds.clear();
   prevEnded = false;
   justEnded = false;
+  gameoverScrolled = false;
   currentMatchID = null;
   roomInfo = null;
   inGameScreen = false;

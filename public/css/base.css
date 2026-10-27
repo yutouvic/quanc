@@ -285,14 +285,17 @@ label input, label select {
 /* 脉冲性能优化：阴影固定在伪元素上，仅动画 opacity（合成器处理，不逐帧重绘） */
 .panel-forced::before {
   content: '';
-  position: absolute; inset: 0;
+  position: absolute; inset: -4px;
   border-radius: inherit;
-  box-shadow: 0 0 18px 3px rgba(255,82,82,0.55);
-  animation: panel-forced-pulse 1.2s ease-in-out infinite;
+  box-shadow:
+    0 0 0 3px rgba(255, 86, 66, 1),
+    0 0 18px 5px rgba(231, 76, 60, 0.9),
+    0 0 34px 10px rgba(231, 76, 60, 0.45);
+  animation: panel-forced-pulse 0.9s ease-in-out infinite;
   pointer-events: none;
 }
 @keyframes panel-forced-pulse {
-  0%, 100% { opacity: 0.25; }
+  0%, 100% { opacity: 0.55; }
   50% { opacity: 1; }
 }
 

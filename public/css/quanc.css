@@ -215,7 +215,67 @@
 
 /* ========== 刺客结算面板 ========== */
 .assassin-title { font-size: 13px; color: #ffd966; margin-bottom: 8px; }
-.assassin-candidates { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+
+/* 刺客待结算：区域内可移除目标的发光标记（仅动画 opacity，避免高 CPU 占用） */
+.card.assassin-target { cursor: pointer; }
+.card.assassin-target::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 11px;
+  box-shadow:
+    0 0 0 3px rgba(255, 86, 66, 1),
+    0 0 18px 5px rgba(231, 76, 60, 0.9),
+    0 0 34px 10px rgba(231, 76, 60, 0.45);
+  opacity: 0.55;
+  animation: assassin-target-pulse 0.9s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes assassin-target-pulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+/* 守卫免疫 / 刺客自身：弱化置灰，提示不可移除 */
+.card.assassin-immune { opacity: 0.45; filter: grayscale(0.7); }
+
+/* Driver.js 刺客引导弹窗：深色主题适配 */
+.driver-popover.quanc-assassin-popover {
+  background: #232946;
+  color: #f4f4f8;
+  border: 1px solid rgba(231, 76, 60, 0.55);
+  border-radius: 10px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
+}
+.driver-popover.quanc-assassin-popover .driver-popover-title { color: #ffd966; cursor: move; user-select: none; -webkit-user-select: none; }
+/* 拖动后弹窗与高亮区域脱钩，隐藏指向箭头 */
+.driver-popover.quanc-assassin-popover.popover-dragged .driver-popover-arrow { display: none; }
+.driver-popover.quanc-assassin-popover .driver-popover-description { color: #cfd2e1; }
+.driver-popover.quanc-assassin-popover .driver-popover-progress-text { color: #8a8fa8; }
+.driver-popover.quanc-assassin-popover .driver-popover-close-btn { color: #cfd2e1; }
+.driver-popover.quanc-assassin-popover .driver-popover-close-btn:hover { color: #fff; }
+.driver-popover.quanc-assassin-popover .driver-popover-next-btn {
+  background: #c0392b;
+  color: #fff;
+  text-shadow: none;
+  border-radius: 6px;
+}
+.driver-popover.quanc-assassin-popover .driver-popover-next-btn:hover { background: #e74c3c; }
+/* 底部「关闭弹窗」按钮：低调次要样式，与主按钮区分 */
+.driver-popover.quanc-assassin-popover .driver-popover-footer .driver-popover-close-btn {
+  background: transparent;
+  color: #cfd2e1;
+  border: 1px solid rgba(207, 210, 225, 0.4);
+  text-shadow: none;
+  border-radius: 6px;
+}
+.driver-popover.quanc-assassin-popover .driver-popover-footer .driver-popover-close-btn:hover {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.7);
+}
+.driver-popover.quanc-assassin-popover .driver-popover-arrow-side-top { border-top-color: #232946; }
+.driver-popover.quanc-assassin-popover .driver-popover-arrow-side-bottom { border-bottom-color: #232946; }
+.driver-popover.quanc-assassin-popover .driver-popover-arrow-side-left { border-left-color: #232946; }
+.driver-popover.quanc-assassin-popover .driver-popover-arrow-side-right { border-right-color: #232946; }
 
 /* ========== 动效 ========== */
 /* 新牌进入：弹入 + 淡入 */

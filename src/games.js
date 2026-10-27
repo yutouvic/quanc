@@ -19,7 +19,7 @@ import { PresagesGame } from './presages.js';
 export const GAMES = [
   {
     title: 'Quanc',
-    tagline: '2-5 人 · 回合制 · 卡牌博弈',
+    tagline: '2-5 人 · 拔河机制',
     description: '六大家族争名逐利，是扶持，是制衡，还是打压？间谍潜伏、刺客暗算、贵族权重，阴谋一触即发。',
     icon: '🦁',
     color: '#d6c01bff',
