@@ -302,7 +302,7 @@
   display: flex; flex-direction: column; gap: 2px;
   background: rgba(0,0,0,0.25); border-radius: 8px; padding: 6px 12px; font-size: 13px;
 }
-.go-score { font-weight: 700; color: #ffd966; }
+.go-score { font-size: 18px; font-weight: 700; color: #ffd966; }
 .go-detail { font-size: 11px; opacity: 0.75; color: #ffd966; }
 
 /* 结算面板：每个玩家的 2 个任务 chip */
@@ -320,21 +320,39 @@
 .go-task-name { font-size: 12px; font-weight: 600; }
 .go-task-desc { font-size: 10px; opacity: 0.65; line-height: 1.35; }
 
-/* 结算页家族命运一览 */
-.fate-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
-.fate-item {
-  display: inline-flex; align-items: center; gap: 5px;
-  border-radius: 8px; padding: 3px 8px; font-size: 12px;
-  border: 1px solid var(--c); background: rgba(255,255,255,0.04);
+/* 结算页：玩家 × 6 家族得分表（玩家名称 + 6 家族 + 总分，共 8 列） */
+.go-fam-table {
+  width: 100%; max-width: 720px;
+  margin-bottom: 10px; padding: 4px 8px;
+  background: rgba(0,0,0,0.25); border-radius: 8px;
+  font-size: 12px; font-variant-numeric: tabular-nums;
+  overflow-x: auto;
 }
-.fate-favored { box-shadow: inset 0 0 0 1px rgba(90,200,130,0.6); }
-.fate-disfavored { box-shadow: inset 0 0 0 1px rgba(220,120,120,0.6); }
-.fate-neutral { opacity: 0.75; }
+.go-fam-row {
+  display: grid; align-items: center; gap: 4px;
+  grid-template-columns: minmax(96px, 1.5fr) repeat(6, minmax(44px, 1fr)) minmax(52px, 0.8fr);
+  padding: 4px 2px;
+}
+.go-fam-row + .go-fam-row { border-top: 1px solid rgba(255,255,255,0.08); }
+.go-fam-head { align-items: stretch; }
+.go-fam-head .go-fam-cell {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+}
+.go-fam-icon { color: var(--c, #cfcfcf); font-size: 13px; line-height: 1; }
+.go-fam-label { color: #cfd2e1; font-size: 10px; }
+.go-fam-head .fate-badge { font-size: 9px; font-weight: 500; }
+.go-fam-name { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.go-fam-name .player-tag { gap: 4px; }
+.go-fam-cell { text-align: center; font-weight: 600; }
+.go-fam-total { text-align: right; font-weight: 700; }
+.go-fam-cell.pos, .go-fam-total.pos { color: #7fe0a3; }
+.go-fam-cell.neg, .go-fam-total.neg { color: #f08f8f; }
+.go-fam-cell.zero, .go-fam-total.zero { color: #8c90a0; }
+.go-fam-head .go-fam-total { color: #ffd966; font-size: 10px; }
 .fate-badge { font-weight: 700; }
 .fate-favored .fate-badge { color: #7fe0a3; }
 .fate-disfavored .fate-badge { color: #f08f8f; }
 .fate-neutral .fate-badge { color: #cfcfcf; }
-.fate-nums { opacity: 0.6; font-variant-numeric: tabular-nums; }
 
 /* ========== Quanc 响应式 ========== */
 @media (max-width: 768px) {
@@ -372,6 +390,19 @@
 
   .task-panel { gap: 6px; margin-bottom: 8px; }
   .territory-score { font-size: 11px; }
+
+  /* 结算家族得分表：手机端压缩列宽，8 列尽量一屏放下 */
+  .go-fam-table { padding: 4px 6px; font-size: 11px; }
+  .go-fam-row {
+    gap: 2px; padding: 3px 0;
+    grid-template-columns: minmax(72px, 1.4fr) repeat(6, minmax(28px, 1fr)) minmax(38px, 0.7fr);
+  }
+  .go-fam-icon { font-size: 11px; }
+  .go-fam-label { font-size: 9px; }
+  .go-fam-head .fate-badge { font-size: 8px; }
+  .go-fam-head .go-fam-total { font-size: 9px; }
+  .go-fam-name .player-no { display: none; }
+  .go-fam-name .player-name { font-size: 11px; }
 }
 
 /* 触屏设备：取消悬停位移，避免点按后卡片“卡住”抬起 */

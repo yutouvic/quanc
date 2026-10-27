@@ -151,7 +151,7 @@
 .ps-played { display: flex; flex-wrap: wrap; gap: 8px; min-height: 30px; }
 .ps-played .empty-hint { align-self: center; padding: 6px 0; }
 
-/* 卡牌旁的结算预览：赢/可弃掉 chip（纵向排列于大卡右侧，仅标注正状态） */
+/* 卡牌旁的结算预览：赢/可鸽可弃 chip（纵向排列于大卡右侧，仅标注正状态） */
 .ps-played-item { display: flex; align-items: center; gap: 6px; }
 .ps-preview { display: flex; flex-direction: column; gap: 4px; }
 .ps-preview-chip {

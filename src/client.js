@@ -38,7 +38,7 @@ let prevEnded = false;       // 上一帧是否已结束（用于一次性触发
 let justEnded = false;       // 本帧是否为游戏结束瞬间
 let prevCardLocations = new Map(); // 上一帧的「卡牌 id → 逻辑位置」映射，用于 diff 出移动/新增/消失以播放飞行动画
 const loadedCSS = new Set(); // 已动态加载的游戏 CSS 路径（去重）
-const CSS_VERSION = '55';     // CSS 版本号：样式更新时递增，防止浏览器缓存旧样式
+const CSS_VERSION = '58';     // CSS 版本号：样式更新时递增，防止浏览器缓存旧样式
 let rgSelected = [];         // Regicide 手牌多选索引（连招 / 承伤弃牌共用）
 let prevRgForced = false;    // Regicide 上一帧是否处于强制结算（用于自动定位只触发一次）
 let psSelected = null;       // Presages 当前选中的手牌索引
@@ -763,6 +763,23 @@ function goTaskChip(label, task, done) {
   ]);
 }
 
+/** 结算表格用：某玩家领地中各家族的得分（家族得宠 +权重 / 失宠 -权重 / 中立 0）。 */
+function familyScoreValues(territory, fates) {
+  const values = {};
+  for (const f of FAMILIES) {
+    const fate = fates[f.id] ? fates[f.id].fate : 'neutral';
+    let v = 0;
+    for (const c of territory || []) {
+      if (c.family !== f.id) continue;
+      const w = c.weight ?? 1;
+      if (fate === 'favored') v += w;
+      else if (fate === 'disfavored') v -= w;
+    }
+    values[f.id] = v;
+  }
+  return values;
+}
+
 function renderGameover(G) {
   const box = $('#gameover');
   if (!G.results) {
@@ -804,17 +821,39 @@ function renderGameover(G) {
     return el('div', { class: 'go-row' }, children);
   });
   box.appendChild(el('div', { class: 'go-scores' }, rows));
-  const fateRows = FAMILIES.map(f => {
-    const info = fates[f.id];
-    const lbl = fateLabel(info.fate);
-    return el('div', { class: `fate-item ${lbl.cls}`, style: `--c:${f.color}` }, [
-      el('span', { class: 'chip-icon' }, [svgNode(FAMILY_ICONS[f.id])]),
-      el('span', { class: 'chip-name', text: f.name }),
-      el('span', { class: 'fate-badge', text: lbl.text }),
-      el('span', { class: 'fate-nums', text: `+${info.favored}/-${info.disfavored}` }),
+  // 家族得分表：玩家名称 + 6 个家族 + 总分，共 8 列
+  const famHead = el('div', { class: 'go-fam-row go-fam-head' }, [
+    el('div', { class: 'go-fam-name', text: '玩家' }),
+    ...FAMILIES.map(f => {
+      const lbl = fateLabel(fates[f.id] ? fates[f.id].fate : 'neutral');
+      return el('div', { class: `go-fam-cell ${lbl.cls}` }, [
+        el('span', { class: 'go-fam-icon', style: `--c:${f.color}` }, [svgNode(FAMILY_ICONS[f.id])]),
+        el('span', { class: 'go-fam-label', text: f.name }),
+        el('span', { class: 'fate-badge', text: lbl.text }),
+      ]);
+    }),
+    el('div', { class: 'go-fam-total', text: '领地分' }),
+  ]);
+  const famRows = Object.keys(scores).map(id => {
+    const values = familyScoreValues(G.players[id] && G.players[id].territory, fates);
+    const total = FAMILIES.reduce((sum, f) => sum + values[f.id], 0);
+    const signCls = v => (v > 0 ? 'pos' : v < 0 ? 'neg' : 'zero');
+    return el('div', { class: 'go-fam-row' }, [
+      el('div', { class: 'go-fam-name' }, [playerNameNode(id, nicknames)]),
+      ...FAMILIES.map(f => {
+        const v = values[f.id];
+        return el('div', {
+          class: `go-fam-cell ${signCls(v)}`,
+          text: v > 0 ? `+${v}` : String(v),
+        });
+      }),
+      el('div', {
+        class: `go-fam-total ${signCls(total)}`,
+        text: total > 0 ? `+${total}` : String(total),
+      }),
     ]);
   });
-  box.appendChild(el('div', { class: 'fate-row' }, fateRows));
+  box.appendChild(el('div', { class: 'go-fam-table' }, [famHead, ...famRows]));
   box.appendChild(backToLobbyButton());
   scrollToGameover(box);
 }
@@ -1910,7 +1949,7 @@ function presagesFieldNode(entry, index, playerID, pending, preview) {
   const chips = [];
   if (isWinner) chips.push(el('span', { class: 'ps-preview-chip ps-preview-win', text: '赢' }));
   if (willDiscard && discardSources.length > 0) {
-    chips.push(el('span', { class: 'ps-preview-chip ps-preview-discard', text: '可弃掉' }));
+    chips.push(el('span', { class: 'ps-preview-chip ps-preview-discard', text: '可鸽可弃' }));
   }
   if (chips.length === 0) return card;
   return el('div', { class: 'ps-played-item' }, [
