@@ -716,7 +716,7 @@ export const QuancGame = {
       players[id] = {
         hand: id === playerID ? p.hand : p.hand.length,
         territory: p.territory.map(c => maskCard(c, ended)),
-        tasks: id === playerID ? p.tasks : null,
+        tasks: (id === playerID || ended) ? p.tasks : null,
       };
     }
     return {

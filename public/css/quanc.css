@@ -215,6 +215,11 @@
 
 /* ========== 刺客结算面板 ========== */
 .assassin-title { font-size: 13px; color: #ffd966; margin-bottom: 8px; }
+/* 面板中展示的刺客目标区域卡牌行 */
+.assassin-cards {
+  display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px;
+  min-height: 40px; align-items: center;
+}
 
 /* 刺客待结算：区域内可移除目标的发光标记（仅动画 opacity，避免高 CPU 占用） */
 .card.assassin-target { cursor: pointer; }
@@ -238,44 +243,42 @@
 /* 守卫免疫 / 刺客自身：弱化置灰，提示不可移除 */
 .card.assassin-immune { opacity: 0.45; filter: grayscale(0.7); }
 
-/* Driver.js 刺客引导弹窗：深色主题适配 */
-.driver-popover.quanc-assassin-popover {
-  background: #232946;
-  color: #f4f4f8;
-  border: 1px solid rgba(231, 76, 60, 0.55);
+/* 闲置 5 秒后弹出的「结束回合」轻量提示浮层 */
+.end-turn-toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--screen-pad) + 140px);
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(35, 41, 70, 0.96);
+  border: 1px solid rgba(255, 217, 102, 0.6);
   border-radius: 10px;
+  padding: 10px 14px;
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
+  z-index: 1000;
+  animation: end-turn-toast-in 0.25s ease-out;
 }
-.driver-popover.quanc-assassin-popover .driver-popover-title { color: #ffd966; cursor: move; user-select: none; -webkit-user-select: none; }
-/* 拖动后弹窗与高亮区域脱钩，隐藏指向箭头 */
-.driver-popover.quanc-assassin-popover.popover-dragged .driver-popover-arrow { display: none; }
-.driver-popover.quanc-assassin-popover .driver-popover-description { color: #cfd2e1; }
-.driver-popover.quanc-assassin-popover .driver-popover-progress-text { color: #8a8fa8; }
-.driver-popover.quanc-assassin-popover .driver-popover-close-btn { color: #cfd2e1; }
-.driver-popover.quanc-assassin-popover .driver-popover-close-btn:hover { color: #fff; }
-.driver-popover.quanc-assassin-popover .driver-popover-next-btn {
-  background: #c0392b;
-  color: #fff;
-  text-shadow: none;
-  border-radius: 6px;
+@keyframes end-turn-toast-in {
+  from { opacity: 0; transform: translate(-50%, 12px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
 }
-.driver-popover.quanc-assassin-popover .driver-popover-next-btn:hover { background: #e74c3c; }
-/* 底部「关闭弹窗」按钮：低调次要样式，与主按钮区分 */
-.driver-popover.quanc-assassin-popover .driver-popover-footer .driver-popover-close-btn {
+.end-turn-toast-text { color: #ffd966; font-size: 14px; white-space: nowrap; }
+.end-turn-toast-close {
   background: transparent;
+  border: none;
   color: #cfd2e1;
-  border: 1px solid rgba(207, 210, 225, 0.4);
-  text-shadow: none;
-  border-radius: 6px;
+  font-size: 18px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0 2px;
 }
-.driver-popover.quanc-assassin-popover .driver-popover-footer .driver-popover-close-btn:hover {
-  color: #fff;
-  border-color: rgba(255, 255, 255, 0.7);
+.end-turn-toast-close:hover { color: #fff; }
+@media (max-width: 480px) {
+  .end-turn-toast { flex-wrap: wrap; justify-content: center; bottom: calc(var(--screen-pad) + 180px); }
+  .end-turn-toast-text { white-space: normal; text-align: center; width: 100%; }
 }
-.driver-popover.quanc-assassin-popover .driver-popover-arrow-side-top { border-top-color: #232946; }
-.driver-popover.quanc-assassin-popover .driver-popover-arrow-side-bottom { border-bottom-color: #232946; }
-.driver-popover.quanc-assassin-popover .driver-popover-arrow-side-left { border-left-color: #232946; }
-.driver-popover.quanc-assassin-popover .driver-popover-arrow-side-right { border-right-color: #232946; }
 
 /* ========== 动效 ========== */
 /* 新牌进入：弹入 + 淡入 */
@@ -301,6 +304,21 @@
 }
 .go-score { font-weight: 700; color: #ffd966; }
 .go-detail { font-size: 11px; opacity: 0.75; color: #ffd966; }
+
+/* 结算面板：每个玩家的 2 个任务 chip */
+.go-tasks { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+.go-task {
+  background: rgba(0,0,0,0.25); border-radius: 6px; padding: 5px 8px;
+  border: 1px solid rgba(255,255,255,0.12); font-size: 11px;
+}
+.go-task.go-task-done { border-color: rgba(90,200,130,0.55); background: rgba(47,125,79,0.14); }
+.go-task-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1px; }
+.go-task-label { font-size: 10px; opacity: 0.65; text-transform: uppercase; letter-spacing: 1px; }
+.go-task-status { font-size: 11px; font-weight: 700; }
+.go-task-done .go-task-status { color: #7fe0a3; }
+.go-task:not(.go-task-done) .go-task-status { color: #cfcfcf; opacity: 0.7; }
+.go-task-name { font-size: 12px; font-weight: 600; }
+.go-task-desc { font-size: 10px; opacity: 0.65; line-height: 1.35; }
 
 /* 结算页家族命运一览 */
 .fate-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
