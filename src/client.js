@@ -38,7 +38,7 @@ let prevEnded = false;       // 上一帧是否已结束（用于一次性触发
 let justEnded = false;       // 本帧是否为游戏结束瞬间
 let prevCardLocations = new Map(); // 上一帧的「卡牌 id → 逻辑位置」映射，用于 diff 出移动/新增/消失以播放飞行动画
 const loadedCSS = new Set(); // 已动态加载的游戏 CSS 路径（去重）
-const CSS_VERSION = '58';     // CSS 版本号：样式更新时递增，防止浏览器缓存旧样式
+const CSS_VERSION = '59';     // CSS 版本号：样式更新时递增，防止浏览器缓存旧样式
 let rgSelected = [];         // Regicide 手牌多选索引（连招 / 承伤弃牌共用）
 let prevRgForced = false;    // Regicide 上一帧是否处于强制结算（用于自动定位只触发一次）
 let psSelected = null;       // Presages 当前选中的手牌索引
@@ -550,13 +550,13 @@ function hideEndTurnHint() {
 }
 
 /** 弹出「结束回合」轻量提示框（底部浮层，含结束回合按钮与关闭按钮）。 */
-function showEndTurnHint() {
+function showEndTurnHint(text = '本回合行动已完成，是否结束回合？', onConfirm = () => client.moves.endTurn()) {
   if (endTurnHintEl) return;
   const toast = el('div', { class: 'end-turn-toast' }, [
-    el('span', { class: 'end-turn-toast-text', text: '本回合行动已完成，是否结束回合？' }),
+    el('span', { class: 'end-turn-toast-text', text }),
     el('button', {
       class: 'btn btn-sm btn-primary', text: '结束回合',
-      onClick: () => { client.moves.endTurn(); hideEndTurnHint(); },
+      onClick: () => { onConfirm(); resetRed7Selection(); hideEndTurnHint(); },
     }),
     el('button', { class: 'end-turn-toast-close', text: '×', title: '稍后', onClick: hideEndTurnHint }),
   ]);
@@ -1082,6 +1082,30 @@ function renderRed7Hand(G, playerID, isMyTurn) {
   });
 }
 
+/** Red7 结束回合：未处于优胜时需二次确认，避免误点直接出局。 */
+function red7EndTurn(G, playerID) {
+  const winning = computeWinningIds(G).includes(playerID);
+  if (!winning && !window.confirm('你当前不在优胜状态，结束回合将被淘汰。确定结束回合吗？')) return;
+  client.moves.endTurn();
+  resetRed7Selection();
+}
+
+/** Red7「撤回」按钮行：本回合已有操作时显示（每人每局最多 3 次）。 */
+function red7UndoRow(G, playerID) {
+  if (!(G.turnPlayed || G.turnDiscarded)) return null;
+  const used = (G.undoCount && G.undoCount[playerID]) || 0;
+  const left = Math.max(0, 3 - used);
+  return el('div', { class: 'turn-actions' }, [
+    el('button', {
+      class: 'btn btn-sm btn-undo',
+      text: `↩ 撤回（剩 ${left} 次）`,
+      disabled: left <= 0 ? 'disabled' : false,
+      title: '撤回本回合已打出的牌、弃牌与规则变化',
+      onClick: () => { client.moves.undoTurn(); resetRed7Selection(); },
+    }),
+  ]);
+}
+
 /** 进阶规则待结算面板：打出1（选其他玩家牌）或打出7（弃自己调色盘牌）。 */
 function renderRed7PendingPanel(state) {
   const { G, playerID } = state;
@@ -1157,6 +1181,10 @@ function renderRed7PendingPanel(state) {
       ]));
     }
   }
+
+  // 待结算状态下仍可撤回本回合操作（会撤销触发特效的那次出牌）
+  const undoRow = red7UndoRow(G, playerID);
+  if (undoRow) panel.appendChild(undoRow);
 }
 
 /**
@@ -1224,7 +1252,7 @@ function renderRed7ActionPreview(panel, state, card) {
   // 操作回调（点击即执行，按钮文案已提示将触发的特效）
   const play = () => { client.moves.playCard(selectedIndex); resetRed7Selection(); };
   const discard = () => { client.moves.discardToCanvas(selectedIndex); resetRed7Selection(); };
-  const end = () => { client.moves.endTurn(); resetRed7Selection(); };
+  const end = () => red7EndTurn(G, playerID);
 
   // 建议结束回合（结束回合按钮高亮引导）
   const winning = computeWinningIds(G).includes(playerID);
@@ -1283,9 +1311,25 @@ function renderRed7PlayPanel(state) {
   }
   prevForcedAction = forced;
 
-  if (G.results) return;
+  if (G.results) {
+    hideEndTurnHint();
+    return;
+  }
 
   const isMyTurn = ctx.currentPlayer === playerID;
+
+  // 闲置 5 秒提示结束回合：当前回合玩家已处于优胜，且当前可合法结束回合
+  //（无待结算效果、无「必须续打」，与 endTurn 的服务端校验保持一致）
+  const winningNow = isMyTurn && !G.pending && !G.mustPlay
+    && computeWinningIds(G).includes(playerID);
+  if (winningNow) {
+    if (!endTurnHintTimer) {
+      endTurnHintTimer = setTimeout(() => showEndTurnHint('你已处于优胜状态，是否结束回合？'), 5000);
+    }
+  } else {
+    hideEndTurnHint();
+  }
+
   if (!isMyTurn) {
     panel.appendChild(el('div', { class: 'r7-hint', text: '等待其他玩家行动...' }));
     return;
@@ -1345,10 +1389,14 @@ function renderRed7PlayPanel(state) {
       el('button', {
         class: `btn btn-sm btn-primary ${suggestEnd ? 'btn-end-suggest' : ''}`,
         text: '结束回合',
-        onClick: () => { client.moves.endTurn(); resetRed7Selection(); },
+        onClick: () => red7EndTurn(G, playerID),
       }),
     ]));
   }
+
+  // 本回合已有操作时提供「撤回」（每人每局最多 3 次）
+  const undoRow = red7UndoRow(G, playerID);
+  if (undoRow) panel.appendChild(undoRow);
 }
 
 /** 结算：仅显示获胜者。 */
@@ -2214,6 +2262,19 @@ function renderPresagesPanel(state) {
   const nicknames = nicknameMap();
   const nameOf = (id) => nicknames.get(String(id)) || `玩家 ${id}`;
 
+  // 全员出牌后的结算确认阶段：闲置 5 秒提醒点击「结束回合」（浮层样式同 Red7）
+  const awaitingConfirm = !!G.turnConfirm && G.playOrder.includes(playerID) && !G.turnConfirm[playerID];
+  if (awaitingConfirm) {
+    if (!endTurnHintTimer) {
+      endTurnHintTimer = setTimeout(
+        () => showEndTurnHint('全员已出牌，是否结束本回合？', () => client.moves.confirmTurnEnd()),
+        5000,
+      );
+    }
+  } else {
+    hideEndTurnHint();
+  }
+
   if (G.ended) {
     container.appendChild(el('div', { class: 'ps-panel-hint', text: '本局已结束，可点击右上角「回到房间」开始新一局。' }));
     return;
@@ -2919,6 +2980,7 @@ function showSetupScreen() {
 
 function showLobbyScreen() {
   inGameScreen = false;
+  hideEndTurnHint(); // 返回大厅时清除可能残留的结束回合提示
   $('#library').style.display = 'none';
   $('#setup').style.display = 'none';
   $('#game').style.display = 'none';

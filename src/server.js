@@ -44,6 +44,29 @@ const server = Server({
   apiOrigins: ['*'],
 });
 
+// 命名空间事件校验：boardgame.io 的对局数据库按 matchID 全局共享，重启后
+// 4 位随机 ID 可能被另一款游戏复用。若客户端用旧 matchID 自动重连到错误
+// 游戏的命名空间，sync 会拉到结构不匹配的 G，导致该游戏的 playerView 抛错。
+// 这里在事件分发前拦截 gameName 不匹配的 sync，客户端需重新进入房间。
+for (const { game } of GAMES) {
+  const nsp = server.app._io.of(game.name);
+  nsp.on('connection', (socket) => {
+    socket.use(async (packet, next) => {
+      if (packet[0] !== 'sync') return next();
+      try {
+        const { metadata } = await server.db.fetch(packet[1], { metadata: true });
+        if (metadata && metadata.gameName && metadata.gameName !== game.name) {
+          // 静默丢弃：客户端未处理 socket error，避免无效对局被拉取
+          return;
+        }
+      } catch {
+        // 查询失败时不拦截，交由 boardgame.io 正常处理
+      }
+      next();
+    });
+  });
+}
+
 /** 读取请求体原始内容（本中间件先于路由级 koa-body 执行，需自行消费流）。 */
 function readRawBody(req) {
   return new Promise((resolve, reject) => {
@@ -72,19 +95,29 @@ function withMatchJoinLock(matchID, task) {
 }
 
 // 房间加入拦截：
-// 1. 开局后禁止新玩家加入（房间固定 5 个座位，未开局前可随时加入空座位）；
-// 2. 同一房间内玩家昵称不能重名。
+// 1. 对局必须属于当前游戏名称（boardgame.io 的 matchID 在各游戏间共享数据库，
+//    重启后 4 位随机 ID 可能被其他游戏复用，跨游戏同步会让 playerView 拿到
+//    结构不匹配的 G 而崩溃）；
+// 2. 开局后禁止新玩家加入（房间固定 5 个座位，未开局前可随时加入空座位）；
+// 3. 同一房间内玩家昵称不能重名。
 // 必须在 server.run() 注册大厅路由前插入到中间件栈最前面，
 // 否则已匹配 /join 的路由不会继续调用后续中间件。
 server.app.middleware.unshift(async (ctx, next) => {
-  const match = /^\/games\/[^/]+\/([^/]+)\/join$/.exec(ctx.path);
+  const match = /^\/games\/([^/]+)\/([^/]+)\/join$/.exec(ctx.path);
   if (ctx.method === 'POST' && match) {
-    const matchID = decodeURIComponent(match[1]);
+    const gameName = decodeURIComponent(match[1]);
+    const matchID = decodeURIComponent(match[2]);
     await withMatchJoinLock(matchID, async () => {
       const { state, metadata } = await server.db.fetch(matchID, {
         state: true,
         metadata: true,
       });
+      // 跨游戏复用 ID：拒绝加入，避免客户端连接到错误游戏的命名空间
+      if (metadata && metadata.gameName && metadata.gameName !== gameName) {
+        ctx.status = 403;
+        ctx.body = '对局不存在或不属于当前游戏，请确认对局 ID';
+        return;
+      }
       if (state?.G?.lobby?.started) {
         ctx.status = 403;
         ctx.body = '游戏已开始，无法加入';
@@ -120,6 +153,25 @@ server.app.middleware.unshift(async (ctx, next) => {
       await next();
     });
     return;
+  }
+  await next();
+});
+
+// 查询对局元数据拦截：对局必须属于 URL 中的游戏名称。
+// 刷新恢复会话时会先 GET /games/:name/:id 校验座位，若该 matchID 已被其他游戏
+// 复用（重启后随机 ID 会重新发放），必须返回 404 让客户端清除会话，
+// 否则客户端会用错误的游戏命名空间连接，playerView 拿到不匹配的 G 后崩溃。
+server.app.middleware.unshift(async (ctx, next) => {
+  const match = /^\/games\/([^/]+)\/([^/]+)$/.exec(ctx.path);
+  if (ctx.method === 'GET' && match) {
+    const gameName = decodeURIComponent(match[1]);
+    const matchID = decodeURIComponent(match[2]);
+    const { metadata } = await server.db.fetch(matchID, { metadata: true });
+    if (metadata && metadata.gameName && metadata.gameName !== gameName) {
+      ctx.status = 404;
+      ctx.body = '对局不存在';
+      return;
+    }
   }
   await next();
 });

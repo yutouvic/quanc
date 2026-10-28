@@ -368,6 +368,51 @@ function endRound(G, winnerId) {
 }
 
 /**
+ * 记录本回合首次操作前的完整状态快照（撤回用）。
+ * 牌堆顺序会影响撤回结果，因此需完整复制；快照仅在服务端使用，
+ * 通过 playerView 剥离，避免向其他玩家泄露隐藏牌信息。
+ */
+function snapshotTurn(G) {
+  return {
+    deck: [...G.deck],
+    canvas: [...G.canvas],
+    players: Object.fromEntries(Object.entries(G.players).map(([id, p]) => [id, {
+      hand: [...p.hand],
+      palette: [...p.palette],
+      eliminated: p.eliminated,
+    }])),
+    ruleColorIndex: G.ruleColorIndex,
+    turnPlayed: G.turnPlayed,
+    turnDiscarded: G.turnDiscarded,
+    mustPlay: G.mustPlay,
+    pending: G.pending ? { ...G.pending } : null,
+  };
+}
+
+/** 首次操作前调用：仅在尚无快照时记录，保证撤回回到回合开始状态。 */
+function ensureTurnSnapshot(G) {
+  if (!G.turnSnapshot) G.turnSnapshot = snapshotTurn(G);
+}
+
+/** 用快照恢复本回合开始前的状态。 */
+function restoreTurnSnapshot(G, snap) {
+  G.deck = [...snap.deck];
+  G.canvas = [...snap.canvas];
+  for (const id of Object.keys(G.players)) {
+    const sp = snap.players[id];
+    if (!sp) continue;
+    G.players[id].hand = [...sp.hand];
+    G.players[id].palette = [...sp.palette];
+    G.players[id].eliminated = sp.eliminated;
+  }
+  G.ruleColorIndex = snap.ruleColorIndex;
+  G.turnPlayed = snap.turnPlayed;
+  G.turnDiscarded = snap.turnDiscarded;
+  G.mustPlay = snap.mustPlay;
+  G.pending = snap.pending ? { ...snap.pending } : null;
+}
+
+/**
  * 构建全新的大厅初始状态（setup 与「返回房间」共用，保证房间可重复利用）。
  */
 function freshRed7G(ctx, logLine) {
@@ -382,6 +427,8 @@ function freshRed7G(ctx, logLine) {
     turnDiscarded: false, // 本回合是否已弃牌到画布
     mustPlay: false,      // 打出 5 后必须继续打出 1 张牌
     pending: null,        // 待结算效果：null | { type: 'action1' } | { type: 'action7', cardId }
+    turnSnapshot: null,   // 本回合首次操作前的状态快照，用于撤回（含隐藏牌信息，playerView 中剥离）
+    undoCount: {},        // 各玩家已用撤回次数（上限 3 次/人/局）
     lobby: { ready: {}, started: false },
     ended: false,
     results: null, // 结算数据（获胜者），结束时写入
@@ -453,6 +500,9 @@ export const Red7Game = {
             }
             G.playOrder = participants;
 
+            // 初始化各玩家撤回次数
+            participants.forEach((id) => { G.undoCount[id] = 0; });
+
             // 洗牌发牌：每人 7 手牌 + 1 调色盘（牌堆顶顺序发）
             G.deck = shuffleDeck(createDeck(), random);
             let top = 0;
@@ -510,6 +560,7 @@ export const Red7Game = {
           G.turnDiscarded = false;
           G.mustPlay = false;
           G.pending = null;
+          G.turnSnapshot = null; // 撤回快照仅限当前回合
           const active = G.playOrder.filter((id) => !G.players[id].eliminated);
           if (active.length === 1) {
             endRound(G, active[0]);
@@ -547,6 +598,7 @@ export const Red7Game = {
         if (typeof handIndex !== 'number' || handIndex < 0 || handIndex >= p.hand.length) {
           return INVALID_MOVE;
         }
+        ensureTurnSnapshot(G);
         const card = p.hand.splice(handIndex, 1)[0];
         p.palette.push(card);
         G.turnPlayed = true;
@@ -603,6 +655,7 @@ export const Red7Game = {
         if (typeof handIndex !== 'number' || handIndex < 0 || handIndex >= p.hand.length) {
           return INVALID_MOVE;
         }
+        ensureTurnSnapshot(G);
         const card = p.hand.splice(handIndex, 1)[0];
         G.canvas.push(card);
         G.ruleColorIndex = card.colorIndex;
@@ -641,6 +694,31 @@ export const Red7Game = {
     },
 
     /**
+     * 撤回本回合全部操作：恢复到本回合开始前的状态（手牌 / 调色盘 / 画布 / 牌堆 / 规则）。
+     * 每名玩家每局至多 3 次。
+     */
+    undoTurn: {
+      client: false,
+      move: ({ G, ctx, playerID }) => {
+        if (ctx.phase !== 'play') return INVALID_MOVE;
+        if (G.ended) return INVALID_MOVE; // 本局已结束，等待返回房间
+        if (playerID !== ctx.currentPlayer) return INVALID_MOVE;
+        const p = G.players[playerID];
+        if (!p || p.eliminated) return INVALID_MOVE;
+        if (!G.turnSnapshot) return INVALID_MOVE; // 本回合尚未执行任何操作
+        const used = G.undoCount[playerID] || 0;
+        if (used >= 3) return INVALID_MOVE;
+
+        restoreTurnSnapshot(G, G.turnSnapshot);
+        G.turnSnapshot = null;
+        G.undoCount[playerID] = used + 1;
+        const left = 3 - used - 1;
+        G.log.push(`玩家 ${pLabel(playerID)} 撤回了本回合操作（剩余 ${left} 次撤回机会）。`);
+        return undefined;
+      },
+    },
+
+    /**
      * 结算打出 1 的效果：选择其他玩家调色盘中的 1 张牌，置于抽牌堆顶部。
      * @param {string} targetPlayerID 被拿牌玩家的 playerID
      * @param {number} paletteIndex 该玩家调色盘中的牌索引
@@ -659,6 +737,7 @@ export const Red7Game = {
         if (typeof paletteIndex !== 'number' || paletteIndex < 0 || paletteIndex >= target.palette.length) {
           return INVALID_MOVE;
         }
+        ensureTurnSnapshot(G);
         const card = target.palette.splice(paletteIndex, 1)[0];
         G.deck.unshift(card); // 置于抽牌堆顶部
         G.pending = null;
@@ -686,6 +765,7 @@ export const Red7Game = {
         }
         const card = p.palette[paletteIndex];
         if (card.id === pending.cardId) return INVALID_MOVE; // 不能弃置本张 7
+        ensureTurnSnapshot(G);
         p.palette.splice(paletteIndex, 1);
         G.canvas.push(card);
         G.ruleColorIndex = card.colorIndex;
@@ -759,6 +839,7 @@ export const Red7Game = {
     return {
       ...G,
       deck: G.deck.length,
+      turnSnapshot: null, // 撤回快照含隐藏牌信息，不下发客户端
       players,
     };
   },

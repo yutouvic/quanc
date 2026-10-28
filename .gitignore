@@ -28,6 +28,7 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
+.trae-html-share-packages/
 
 # Claude Code 本地状态
 .claude/

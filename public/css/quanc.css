@@ -243,43 +243,6 @@
 /* 守卫免疫 / 刺客自身：弱化置灰，提示不可移除 */
 .card.assassin-immune { opacity: 0.45; filter: grayscale(0.7); }
 
-/* 闲置 5 秒后弹出的「结束回合」轻量提示浮层 */
-.end-turn-toast {
-  position: fixed;
-  left: 50%;
-  bottom: calc(var(--screen-pad) + 140px);
-  transform: translateX(-50%);
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  background: rgba(35, 41, 70, 0.96);
-  border: 1px solid rgba(255, 217, 102, 0.6);
-  border-radius: 10px;
-  padding: 10px 14px;
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
-  z-index: 1000;
-  animation: end-turn-toast-in 0.25s ease-out;
-}
-@keyframes end-turn-toast-in {
-  from { opacity: 0; transform: translate(-50%, 12px); }
-  to { opacity: 1; transform: translate(-50%, 0); }
-}
-.end-turn-toast-text { color: #ffd966; font-size: 14px; white-space: nowrap; }
-.end-turn-toast-close {
-  background: transparent;
-  border: none;
-  color: #cfd2e1;
-  font-size: 18px;
-  cursor: pointer;
-  line-height: 1;
-  padding: 0 2px;
-}
-.end-turn-toast-close:hover { color: #fff; }
-@media (max-width: 480px) {
-  .end-turn-toast { flex-wrap: wrap; justify-content: center; bottom: calc(var(--screen-pad) + 180px); }
-  .end-turn-toast-text { white-space: normal; text-align: center; width: 100%; }
-}
-
 /* ========== 动效 ========== */
 /* 新牌进入：弹入 + 淡入 */
 @keyframes card-enter {

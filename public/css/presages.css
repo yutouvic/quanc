@@ -147,7 +147,7 @@
 .ps-player-team { font-size: 11px; color: var(--tc); font-weight: 700; flex: 0 0 auto; }
 .ps-player-stats { display: flex; flex-wrap: wrap; gap: 3px 10px; font-size: 11px; opacity: 0.82; }
 .ps-stat-done { color: #9ad6a8; opacity: 1; }
-/* 玩家框内已打出的牌：与手牌一致的大卡样式 */
+/* 玩家框内已打出的牌：统一使用 mini 小卡样式 */
 .ps-played { display: flex; flex-wrap: wrap; gap: 8px; min-height: 30px; }
 .ps-played .empty-hint { align-self: center; padding: 6px 0; }
 
@@ -221,7 +221,8 @@
 
 @media (max-width: 640px) {
   .ps-round-title { font-size: 16px; }
-  .ps-card { width: 82px; height: 118px; padding: 12px 5px 8px; }
+  /* 仅缩小大卡（手牌等），玩家区域内已打出的 mini 卡继续沿用 --mini-w/--mini-h */
+  .ps-card:not(.ps-card-mini) { width: 82px; height: 118px; padding: 12px 5px 8px; }
   .ps-corner { font-size: 15px; }
   .ps-detail-title { font-size: 13px; }
   .ps-panel-hint { font-size: 12px; }
