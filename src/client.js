@@ -38,7 +38,7 @@ let prevEnded = false;       // 上一帧是否已结束（用于一次性触发
 let justEnded = false;       // 本帧是否为游戏结束瞬间
 let prevCardLocations = new Map(); // 上一帧的「卡牌 id → 逻辑位置」映射，用于 diff 出移动/新增/消失以播放飞行动画
 const loadedCSS = new Set(); // 已动态加载的游戏 CSS 路径（去重）
-const CSS_VERSION = '59';     // CSS 版本号：样式更新时递增，防止浏览器缓存旧样式
+const CSS_VERSION = '61';     // CSS 版本号：样式更新时递增，防止浏览器缓存旧样式
 let rgSelected = [];         // Regicide 手牌多选索引（连招 / 承伤弃牌共用）
 let prevRgForced = false;    // Regicide 上一帧是否处于强制结算（用于自动定位只触发一次）
 let psSelected = null;       // Presages 当前选中的手牌索引
@@ -1949,6 +1949,7 @@ function presagesCardNode(card, {
   const meta = PRESAGES_COLOR_META[card.color] || PRESAGES_COLOR_META.green;
   const cls = ['ps-card'];
   if (mini) cls.push('ps-card-mini');
+  cls.push(`ps-card-${card.color}`); // 按颜色挂卡面样式（绿/黄/红/蓝已接入实景图背景）
   if (selected) cls.push('ps-card-selected');
   if (dimmed) cls.push('ps-card-dimmed');
   if (clickable) cls.push('ps-card-clickable');

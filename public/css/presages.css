@@ -49,6 +49,42 @@
   transition: transform 0.14s ease, box-shadow 0.16s ease, filter 0.16s ease, opacity 0.16s ease;
   flex: 0 0 auto;
 }
+.ps-card-green {
+  /* 绿色牌卡面：assets/presages/绿.jpg + 深色叠加，保证白色文字与点数可读 */
+  background:
+    linear-gradient(180deg, rgba(6,22,10,0.58) 0%, rgba(6,22,10,0.46) 42%, rgba(6,22,10,0.64) 100%),
+    url('../assets/presages/绿.jpg') center / cover no-repeat;
+  border-color: rgba(150,214,164,0.42);
+}
+.ps-card-green .ps-name,
+.ps-card-green .ps-effect { text-shadow: 0 1px 3px rgba(0,0,0,0.6); }
+.ps-card-red {
+  /* 红色牌卡面：assets/presages/红.jpeg + 深色叠加，保证白色文字与点数可读 */
+  background:
+    linear-gradient(180deg, rgba(24,8,6,0.55) 0%, rgba(24,8,6,0.42) 42%, rgba(24,8,6,0.62) 100%),
+    url('../assets/presages/红.jpeg') center / cover no-repeat;
+  border-color: rgba(255,176,150,0.42);
+}
+.ps-card-red .ps-name,
+.ps-card-red .ps-effect { text-shadow: 0 1px 3px rgba(0,0,0,0.6); }
+.ps-card-yellow {
+  /* 黄色牌卡面：assets/presages/黄.jpeg + 暖色浅色叠加，保证深色文字可读 */
+  background:
+    linear-gradient(180deg, rgba(255,246,220,0.62) 0%, rgba(255,242,208,0.5) 45%, rgba(255,240,204,0.66) 100%),
+    url('../assets/presages/黄.jpeg') center / cover no-repeat;
+  border-color: rgba(255,226,158,0.55);
+}
+.ps-card-yellow .ps-name,
+.ps-card-yellow .ps-effect { text-shadow: 0 1px 2px rgba(255,252,240,0.55); }
+.ps-card-blue {
+  /* 蓝色牌卡面：assets/presages/蓝.jpg + 深色叠加，保证白色文字与点数可读 */
+  background:
+    linear-gradient(180deg, rgba(8,14,32,0.58) 0%, rgba(8,14,32,0.46) 42%, rgba(8,14,32,0.64) 100%),
+    url('../assets/presages/蓝.jpg') center / cover no-repeat;
+  border-color: rgba(150,186,240,0.42);
+}
+.ps-card-blue .ps-name,
+.ps-card-blue .ps-effect { text-shadow: 0 1px 3px rgba(0,0,0,0.6); }
 .ps-card::after {
   /* 颜色识别条 */
   content: '';
