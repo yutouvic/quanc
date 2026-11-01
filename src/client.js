@@ -1940,6 +1940,9 @@ function psHandCount(G, id) {
   return Number(p.hand) || 0;
 }
 
+/** Presages 有实景卡面图的点数（对应 assets/presages/<点数>.webp）；缺失的点数保持渐变卡面。 */
+const PRESAGES_CARD_ART = new Set([1, 5, 8, 10, 13, 17, 19, 22, 23, 25, 26, 29]);
+
 /** Presages 卡牌节点：左上角点数 + 右上时机图标 + 名称 + 效果描述（细则提醒仅在详情面板显示，无悬停提示）。 */
 function presagesCardNode(card, {
   selected = false, dimmed = false, clickable = false, winning = false,
@@ -1949,7 +1952,8 @@ function presagesCardNode(card, {
   const meta = PRESAGES_COLOR_META[card.color] || PRESAGES_COLOR_META.green;
   const cls = ['ps-card'];
   if (mini) cls.push('ps-card-mini');
-  cls.push(`ps-card-${card.color}`); // 按颜色挂卡面样式（绿/黄/红/蓝已接入实景图背景）
+  cls.push(`ps-card-${card.color}`); // 颜色类提供边框色
+  if (PRESAGES_CARD_ART.has(card.number)) cls.push('ps-card-art', `ps-card-n${card.number}`); // 有实景图的牌按点数挂卡面
   if (selected) cls.push('ps-card-selected');
   if (dimmed) cls.push('ps-card-dimmed');
   if (clickable) cls.push('ps-card-clickable');
