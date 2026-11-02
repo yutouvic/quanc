@@ -35,7 +35,7 @@
 /* ---------- 卡牌 ---------- */
 .ps-card {
   position: relative;
-  width: 96px; height: 132px;
+  width: 112px; height: 156px;
   border-radius: 9px;
   background:
     linear-gradient(160deg, rgba(255,255,255,0.34), rgba(255,255,255,0) 44%),
@@ -43,8 +43,8 @@
   border: 1px solid rgba(255,255,255,0.26);
   box-shadow: 0 3px 10px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.18);
   color: var(--ink);
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 3px; padding: 14px 6px 9px;
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+  gap: 4px; padding: 6px 6px 10px;
   user-select: none;
   transition: transform 0.14s ease, box-shadow 0.16s ease, filter 0.16s ease, opacity 0.16s ease;
   flex: 0 0 auto;
@@ -54,6 +54,7 @@
 .ps-card-red { border-color: rgba(255,176,150,0.42); }
 .ps-card-yellow { border-color: rgba(255,226,158,0.55); }
 .ps-card-blue { border-color: rgba(150,186,240,0.42); }
+.ps-card-multi { border-color: rgba(200,160,255,0.45); }
 
 /* 带实景图的卡面：按点数挂图（assets/presages/<点数>.webp），深色叠加保证白字可读。
  * 没有对应图片的点数不加 .ps-card-art，保持基础渐变卡面。 */
@@ -86,6 +87,60 @@
   background: var(--c);
   opacity: 0.85;
 }
+/* 大卡顶部信息条：点数（左上圆形）/ 名称（居中）/ 时机图标（右上）三项同高，各有背景色凸显 */
+.ps-head {
+  display: flex; align-items: center; gap: 3px;
+  width: 100%; height: 24px; flex: 0 0 auto;
+}
+.ps-head .ps-corner {
+  position: static; flex: 0 0 24px;
+  width: 24px; height: 24px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  font-size: 14px; font-weight: 800; line-height: 1; letter-spacing: -0.5px;
+  color: #f4f7fb;
+  /* 与名称、时机标记同款深色牌底，保持三项视觉统一 */
+  background: linear-gradient(rgba(8,10,14,0.55), rgba(8,10,14,0.55)), var(--c);
+  border: 1px solid rgba(255,255,255,0.22);
+  text-shadow: none;
+}
+.ps-head .ps-name {
+  flex: 1 1 auto; min-width: 0; height: 24px;
+  padding: 0 2px; border-radius: 999px;
+  font-size: 13px; font-weight: 700; line-height: 22px; letter-spacing: 0;
+  text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  color: #f4f7fb;
+  /* 深色叠加在牌色之上，既保留颜色识别又保证文字可读 */
+  background: linear-gradient(rgba(8,10,14,0.55), rgba(8,10,14,0.55)), var(--c);
+  border: 1px solid rgba(255,255,255,0.22);
+  text-shadow: none;
+}
+.ps-head .ps-sym {
+  position: static; flex: 0 0 24px;
+  width: 24px; height: 24px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  /* 与名称同款浅色图标与深色牌底 */
+  color: #f4f7fb;
+  opacity: 1;
+  filter: none;
+  background: linear-gradient(rgba(8,10,14,0.55), rgba(8,10,14,0.55)), var(--c);
+  border: 1px solid rgba(255,255,255,0.22);
+}
+.ps-head .ps-sym svg { width: 14px; height: 14px; display: block; }
+/* 大卡底部：固定比例（5:3）的紧凑文案区，半透明底色既衬托文案又透出卡面 */
+.ps-card:not(.ps-card-mini) .ps-effect {
+  margin-top: auto; margin-bottom: 0;
+  width: 100%; aspect-ratio: 5 / 3;
+  display: flex; align-items: center; justify-content: center;
+  padding: 2px 4px; border-radius: 8px;
+  font-size: 8px; line-height: 1.5;
+  color: #eef3f9;
+  background: linear-gradient(rgba(8,10,14,0.3), rgba(8,10,14,0.3)), var(--c);
+  border: 1px solid rgba(255,255,255,0.16);
+  text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+}
+
 /* 左上角：点数 */
 .ps-corner {
   position: absolute; top: 3px; left: 7px;
@@ -113,6 +168,7 @@
 .ps-card-mini {
   width: var(--mini-w); height: var(--mini-h);
   padding: 8px 3px 6px; border-radius: 6px; gap: 2px;
+  justify-content: center;
 }
 .ps-card-mini .ps-corner { font-size: 12px; top: 2px; left: 4px; }
 .ps-card-mini .ps-sym { top: 2px; right: 3px; }
@@ -251,7 +307,21 @@
 @media (max-width: 640px) {
   .ps-round-title { font-size: 16px; }
   /* 仅缩小大卡（手牌等），玩家区域内已打出的 mini 卡继续沿用 --mini-w/--mini-h */
-  .ps-card:not(.ps-card-mini) { width: 82px; height: 118px; padding: 12px 5px 8px; }
+  .ps-card:not(.ps-card-mini) { width: 92px; height: 130px; padding: 5px 5px 8px; }
+  /* 大卡顶部信息条同步收缩，三项仍保持同高对齐 */
+  .ps-head { height: 22px; gap: 2px; }
+  .ps-head .ps-corner,
+  .ps-head .ps-sym { flex: 0 0 20px; width: 20px; height: 20px; }
+  .ps-head .ps-corner { font-size: 12px; }
+  .ps-head .ps-name {
+    height: 22px; line-height: 20px; padding: 0 2px;
+    font-size: 11.5px; letter-spacing: 0;
+  }
+  .ps-head .ps-sym svg { width: 12px; height: 12px; }
+  /* 文案区同步收紧：字号 7px、上下内边距 2px */
+  .ps-card:not(.ps-card-mini) .ps-effect {
+    padding: 2px 3px; border-radius: 7px; font-size: 7px;
+  }
   .ps-corner { font-size: 15px; }
   .ps-detail-title { font-size: 13px; }
   .ps-panel-hint { font-size: 12px; }

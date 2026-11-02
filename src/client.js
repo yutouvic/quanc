@@ -1943,7 +1943,12 @@ function psHandCount(G, id) {
 /** Presages 有实景卡面图的点数（对应 assets/presages/<点数>.webp）；缺失的点数保持渐变卡面。 */
 const PRESAGES_CARD_ART = new Set([1, 5, 8, 10, 13, 17, 19, 22, 23, 25, 26, 29]);
 
-/** Presages 卡牌节点：左上角点数 + 右上时机图标 + 名称 + 效果描述（细则提醒仅在详情面板显示，无悬停提示）。 */
+/**
+ * Presages 卡牌节点。
+ * 大卡：顶部信息条 [左上圆形点数 · 居中名称 · 右上时机图标]（三项同高，均有背景色），下方为效果描述。
+ * 小卡：沿用「左上点数 + 右上图标 + 名称」的紧凑布局。
+ * 细则提醒仅在详情面板显示，无悬停提示。
+ */
 function presagesCardNode(card, {
   selected = false, dimmed = false, clickable = false, winning = false,
   mini = false,
@@ -1966,12 +1971,17 @@ function presagesCardNode(card, {
     'data-card-id': card.id,
   };
   if (onClick) { attrs.role = 'button'; attrs.tabindex = '0'; attrs.onClick = onClick; }
-  return el('div', attrs, [
-    el('div', { class: 'ps-corner', text: String(card.number) }),
-    el('div', { class: 'ps-sym' }, [svgNode(PRESAGES_TIMING_ICONS[card.timing === 'lightning' ? 'lightning' : 'hourglass'])]),
-    el('div', { class: 'ps-name', text: card.name }),
-    el('div', { class: 'ps-effect', text: card.effect }),
+  const corner = el('div', { class: 'ps-corner', text: String(card.number) });
+  const sym = el('div', { class: 'ps-sym' }, [
+    svgNode(PRESAGES_TIMING_ICONS[card.timing === 'lightning' ? 'lightning' : 'hourglass']),
   ]);
+  const name = el('div', { class: 'ps-name', text: card.name });
+  const effect = el('div', { class: 'ps-effect', text: card.effect });
+  // 大卡：三项放入同高的顶部信息条；小卡：保持原有的紧凑布局
+  const children = mini
+    ? [corner, sym, name, effect]
+    : [el('div', { class: 'ps-head' }, [corner, name, sym]), effect];
+  return el('div', attrs, children);
 }
 
 /** Presages 玩家框内已打出的一张牌：小卡 + 结算预览（会赢/会被弃），待结算时承担嫉妒/背叛/愤怒的点选。 */
