@@ -1,0 +1,119 @@
+/* Shared Playbox surfaces. Card faces retain their game-specific palettes. */
+:root {
+  --ui-paper: #f6f4ed;
+  --ui-surface: #fffdf6;
+  --ui-green: #315b40;
+  --ui-ink: #293f31;
+  --ui-muted: #6e7968;
+  --ui-border: #dce1d1;
+  --ui-soft: #eaf0df;
+  --ui-red: #a63e35;
+}
+body { background: var(--ui-paper); color: var(--ui-ink); }
+:is(#lobby, #game) { color: var(--ui-ink); padding-top: 30px; }
+:is(#lobby, #game) h1 { font-weight: 700; letter-spacing: 0; }
+:is(#lobby, #game) .subtitle { color: var(--ui-muted); opacity: 1; }
+:is(#lobby, #game) .btn, .end-turn-toast .btn {
+  background: #eef1e5; border: 1px solid #cbd4bd; color: var(--ui-green);
+  border-radius: 7px; box-shadow: none; min-height: 40px;
+}
+:is(#lobby, #game) .btn:hover:not(:disabled) { background: #e0e8d4; box-shadow: none; }
+:is(#lobby, #game) .btn-primary,
+:is(#lobby, #game) .btn-favored,
+.end-turn-toast .btn-primary { background: var(--ui-green); border-color: var(--ui-green); color: #fffdf0; }
+:is(#lobby, #game) .btn-primary:hover:not(:disabled),
+:is(#lobby, #game) .btn-favored:hover:not(:disabled) { background: #244730; }
+:is(#lobby, #game) :is(.btn-leave, .btn-disfavored, .rg-btn-danger) { background: #f8e9e3; color: var(--ui-red); border-color: #dfb8aa; }
+:is(#lobby, #game) :is(.btn-leave, .btn-disfavored, .rg-btn-danger):hover:not(:disabled) { background: #f1d8cf; }
+#game .btn-undo { color: #7c5d22 !important; border-color: #c7b681 !important; }
+#game .btn-undo:hover:not(:disabled) { background: #f4ebd2 !important; }
+:is(#lobby, #game) .btn:disabled { opacity: .5; }
+:is(#lobby, #game) :focus-visible { outline-color: #597b47; }
+:is(#lobby, #game) .status { color: var(--ui-red); }
+:is(#lobby, #game) .match-id { background: #e8eddf; color: var(--ui-green); border: 1px solid #d4ddc6; }
+:is(#lobby, #game) .match-info { opacity: 1; color: var(--ui-muted); }
+#lobby .room-card { background: var(--ui-surface); border-color: var(--ui-border); border-radius: 8px; box-shadow: none; }
+#lobby .room-count { color: var(--ui-green); white-space: normal; }
+#lobby .seat { background: #f7f7ef; border-color: #d6decb; border-radius: 8px; }
+#lobby .seat-filled { background: var(--ui-soft); border-color: #a8bc98; }
+#lobby .seat-filled.ready { box-shadow: inset 0 0 0 1px #b7caa8; }
+#lobby .seat-empty { opacity: 1; color: #76826c; }
+#lobby :is(.seat-no, .seat-state, .room-hint) { opacity: 1; color: var(--ui-muted); }
+#lobby .room-ready-hint { color: var(--ui-green); }
+#lobby .dot-on { background: #69855b; box-shadow: none; }
+#lobby .dot-off { background: #b1843d; }
+#lobby .dot-empty { background: #b3bca8; }
+#lobby .badge-host { background: #efe3bf; color: #735a26; }
+#lobby .badge-me { background: var(--ui-green); color: #fffdf0; }
+#game .game-header { padding-bottom: 18px; border-bottom: 1px solid var(--ui-border); margin-bottom: 22px; }
+#game :is(.table-wrap, .hand-wrap) { background: var(--ui-surface); border: 1px solid var(--ui-border); border-radius: 8px; }
+#game .territory { background: #fafaf2; border-color: var(--ui-border); border-radius: 8px; }
+#game .territory.active { background: #fff7df; border-color: #c79a32; }
+#game .territory.active::before { box-shadow: 0 0 0 1px #d8b45a; animation: none; opacity: 1; }
+#game .territory[data-turn-text]:not([data-turn-text=""])::after { background: #e6c56e; color: #594316; box-shadow: none; }
+:is(#lobby, #game) .player-no { background: #64825a; border-color: #eef3e7; box-shadow: none; text-shadow: none; }
+#game .card { color: #f2ead8; }
+#game .player-me { background: var(--ui-green); color: #fffdf0; box-shadow: none; }
+#game .section-label { color: var(--ui-green); letter-spacing: 0; --sc: #6f8b5e; }
+#game .section-label::before { box-shadow: none; }
+#game :is(.section-label-sub, .label, .empty-hint, .dest-title) { color: var(--ui-muted); opacity: 1; }
+#game .turn-actions { border-color: var(--ui-border); }
+#game .panel-forced { background: #fff0e8; border-color: #c65b4b; border-radius: 8px; }
+#game .panel-forced::before { box-shadow: 0 0 0 1px #c65b4b; }
+#game :is(.territory-score, .assassin-title, .r7-hand-count, .rg-hand-count, .rg-damage-total, .ps-round-title, .ps-panel-title) { color: var(--ui-green); }
+#game :is(.r7-rule, .rg-enemy, .rg-suit-item, .rg-pile, .r7-tip, .rg-tip, .task-item, .ps-detail, .ps-played-detail) {
+  background: #f0f3e8; border-color: #d4ddc7; border-radius: 7px; box-shadow: none;
+}
+#game :is(.rg-enemy-name, .rg-suit-name) { color: var(--ui-ink); }
+#game .rg-hpbar { background: #e2dfd3; border-color: #cfcdbd; }
+#game .rg-hp-fill { background: #bb6352; }
+#game :is(.r7-tip-head, .rg-tip-head) { background: #e8eddf; color: var(--ui-green); border-color: #d4ddc7; letter-spacing: 0; }
+#game :is(.r7-tip-section, .r7-tip-foot) { border-color: #d4ddc7; }
+#game :is(.r7-hint-forced, .r7-hint-suggest, .rg-hint-forced) { color: var(--ui-red); }
+#game :is(.r7-rule-hint, .r7-note) { color: var(--ui-muted); }
+#game :is(.r7-preview-fx, .r7-preview-draw, .rg-preview-fx) { background: #f3ebd2; color: #775a20; border-color: #b69749; }
+#game :is(.r7-preview-fx, .r7-preview-draw, .rg-preview-fx)::after { box-shadow: 0 0 0 1px #c8b478; animation: none; opacity: .5; }
+#game .btn-end-suggest::after { box-shadow: 0 0 0 2px #91a87d; animation: none; opacity: .8; }
+#game :is(.r7-preview-state-ok, .r7-badge-win, .ps-preview-discard) { background: #e0ecd5; color: #365e30; border-color: #a9c195; }
+#game :is(.r7-preview-state-off, .r7-badge-out, .rg-badge) { background: #e8ebdf; color: #59664f; }
+#game :is(.rg-badge-immune, .rg-badge-damage) { background: #f7dfd6; color: #9a3f32; }
+#game .rg-badge-free { background: #e8e1ef; color: #6d4e82; }
+#game .rg-badge-shield { background: #dfe8ef; color: #415e7a; }
+#game :is(.rg-badge-rank, .rg-badge-active, .ps-preview-win, .ps-status, .ps-law) { background: #f2e9cc; color: #765b25; border-color: #d7c592; }
+#game .ps-law-badge { background: #d8bd73; color: #473914; }
+#game .ps-reveal-chip { background: #ebe3f0; color: #6e4c80; border-color: #cbb6d6; }
+#game .ps-last { background: #f0f3e8; }
+#game :is(.ps-detail-title, .ps-played-detail-title) { color: color-mix(in srgb, var(--c) 65%, #24392c); filter: none; }
+#game .ps-last-card { filter: none; }
+#game .ps-stat-done { color: #426b35; }
+#game .chip { background: color-mix(in srgb, var(--c) 12%, #fffdf6); color: color-mix(in srgb, var(--c) 65%, #1d3325); }
+#game .board-side-favored span { color: #426b35; }
+#game .board-side-disfavored span { color: #a3483d; }
+#game .board-head-sub { color: #5e718a; }
+#game .fate-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px; padding: 0; flex-shrink: 0;
+  font-family: Arial, sans-serif; font-size: 18px; font-weight: 700;
+  line-height: 1; white-space: nowrap;
+}
+#game .fate-neutral .fate-badge { background: transparent; color: var(--ui-ink); border: none; box-shadow: none; }
+#game .fate-favored .fate-badge { background: transparent; color: #2e7d32; border: none; box-shadow: none; }
+#game .fate-disfavored .fate-badge { background: transparent; color: #b83f35; border: none; box-shadow: none; }
+#game :is(.task-item.task-done, .go-task.go-task-done) { background: #e7efdb; border-color: #b5c99e; }
+#game :is(.task-status, .go-task:not(.go-task-done) .go-task-status) { color: var(--ui-muted); }
+#game :is(.task-done .task-status, .go-task-done .go-task-status) { color: #426b35; }
+#game .gameover-box { background: #f3ecd6; border-color: #cbbb87; border-radius: 8px; }
+#game :is(.gameover-box h2, .go-score, .go-detail, .go-fam-head .go-fam-total) { color: #735b28; }
+#game :is(.go-row, .go-task, .go-fam-table) { background: #faf9ee; border-color: #dce1d1; }
+#game .go-fam-row + .go-fam-row { border-color: #dce1d1; }
+#game .go-fam-label { color: var(--ui-muted); }
+#game :is(.go-fam-cell.pos, .go-fam-total.pos) { color: #426b35; }
+#game :is(.go-fam-cell.neg, .go-fam-total.neg) { color: #a3483d; }
+#game :is(.go-fam-cell.zero, .go-fam-total.zero) { color: #76806f; }
+.end-turn-toast { background: #fffdf6; border-color: #b7c6a4; border-radius: 8px; box-shadow: 0 6px 22px #293f3126; }
+.end-turn-toast-text, .end-turn-toast-close { color: var(--ui-green); }
+.end-turn-toast-close:hover { color: #244730; }
+@media (max-width: 768px) {
+  :is(#lobby, #game) { padding-top: 20px; }
+  #game .game-header { gap: 12px; }
+}

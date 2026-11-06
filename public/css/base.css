@@ -563,3 +563,31 @@ label input::placeholder { color: rgba(255, 255, 255, 0.35); }
   }
   .panel-forced::before { animation: none; opacity: 0.8; }
 }
+
+/* Library room actions. */
+.library-hero .library-heading { min-width: 0; }
+#open-join-btn { flex: none; min-height: 44px; }
+.library-nickname { max-width: 260px; margin-bottom: 22px; }
+.library-nickname input { min-height: 44px; }
+.game-card { cursor: default; border-radius: 8px; }
+.game-card:hover { transform: none; }
+.game-card::after { content: none; }
+.library-create-btn { margin-top: auto; width: 100%; min-height: 44px; }
+#library-status { overflow-wrap: anywhere; }
+#join-dialog {
+  margin: auto; width: min(400px, calc(100% - 32px)); max-height: calc(100dvh - 32px);
+  padding: 24px; border: 1px solid #52605b; border-radius: 8px;
+  background: #172722; color: #f2ead8; overflow-y: auto;
+  box-shadow: 0 20px 60px #0008;
+}
+#join-dialog::backdrop { background: #0009; }
+.join-dialog-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 20px; }
+.join-dialog-head h2 { font-size: 20px; }
+#close-join-btn { width: 44px; height: 44px; padding: 0; font-size: 24px; }
+#join-btn { width: 100%; min-height: 44px; margin-top: 12px; }
+#join-status { overflow-wrap: anywhere; }
+@media (max-width: 480px) {
+  .library-heading .subtitle { font-size: 12px; }
+  .library-nickname { max-width: none; }
+  #join-dialog { padding: 18px; }
+}

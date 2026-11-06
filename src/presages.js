@@ -698,13 +698,15 @@ function awardRound(G, ctx, random, events, winnerId, reason) {
  */
 function backToLobbyMove({ G, ctx, playerID, events }) {
   if (!G.lobby || !G.lobby.started) return INVALID; // 大厅阶段无需重置
-  if (!G.ended && playerID !== '0') return INVALID; // 进行中仅房主可结束
+  if (!G.ended && playerID !== (G.hostID ?? '0')) return INVALID;
+  const hostID = G.hostID ?? '0';
   const endedByHost = !G.ended;
   const fresh = freshPresagesG(ctx, endedByHost
     ? '房主已结束本局，房间已重置，可开始新一局。'
     : '本局已结束，房间已重置，可开始新一局。');
   for (const k of Object.keys(G)) delete G[k];
   Object.assign(G, fresh);
+  G.hostID = hostID;
   events.setPhase('lobby');
   return undefined;
 }
@@ -748,7 +750,7 @@ export const PresagesGame = {
           client: false,
           move: ({ G, ctx, playerID, events, random }) => {
             if (!G.lobby || G.lobby.started) return INVALID;
-            if (playerID !== '0') return INVALID;
+            if (playerID !== (G.hostID ?? '0')) return INVALID;
             const participants = Object.keys(G.lobby.ready)
               .filter((id) => G.players[id])
               .sort((a, b) => Number(a) - Number(b));

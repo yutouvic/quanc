@@ -1,0 +1,109 @@
+/* Playbox's paper-and-green lobby, scoped away from the game tables. */
+body.library-home { background: #f6f4ed; color: #293f31; }
+#library { max-width: none; padding: 0; min-height: 100dvh; color: #293f31; background: #f6f4ed; }
+#library * { letter-spacing: 0; }
+#library a { color: inherit; text-decoration: none; }
+.library-sidebar { position: fixed; inset: 0 auto 0 0; width: 226px; padding: 40px 24px 24px; border-right: 1px solid #e3e4d8; display: flex; flex-direction: column; background: #f6f4ed; }
+.library-brand { display: flex; gap: 11px; align-items: center; font-size: 23px; font-weight: 800; line-height: 1.2; }
+.library-brand-mark { width: 43px; height: 43px; display: grid; place-items: center; border-radius: 8px; background: #315b40; color: #edf0d8; font-size: 32px; }
+.library-brand small { display: block; font-size: 10px; margin-top: 5px; }
+.library-side-caption { margin: 58px 0 16px 12px; color: #959b8c; font-size: 10px; }
+.library-nav-active { display: flex; align-items: center; gap: 12px; padding: 14px; border-radius: 7px; background: #e8eddf; font-size: 13px; font-weight: 700; }
+.library-nav-active > span:first-child { font-size: 21px; }
+.library-nav-count { margin-left: auto; font-size: 11px; font-weight: 400; }
+.library-side-bottom { margin-top: auto; padding-top: 40px; }
+.library-side-bottom p { color: #72916b; font-size: 22px; line-height: 1.7; margin-bottom: 30px; }
+.library-side-bottom > span { color: #929b88; font-size: 9px; }
+.library-workspace { margin-left: 226px; min-width: 0; }
+.library-topbar { min-height: 88px; padding: 16px 48px; border-bottom: 1px solid #e3e4d8; display: flex; justify-content: space-between; align-items: center; gap: 20px; }
+.library-breadcrumb { font-size: 12px; color: #71806d; }
+.library-breadcrumb span { padding: 0 15px; color: #a8b09c; }
+.library-top-brand { display: none; font-size: 20px; font-weight: 800; }
+.library-top-brand small { font-size: 9px; display: block; }
+#library .library-nickname { display: flex; align-items: center; gap: 12px; margin: 0; max-width: none; font-size: 12px; opacity: 1; color: #71806d; white-space: nowrap; }
+#library .library-nickname input { width: 110px; min-height: 40px; padding: 8px 12px; margin: 0; background: #fffdf6; border: 1px solid #d6dbca; color: #315b40; border-radius: 6px; font-size: 13px; }
+.library-content { max-width: 1250px; margin: auto; padding: 40px 48px 0; }
+#library .library-hero { padding: 0; margin-bottom: 38px; gap: 20px; }
+#library .library-hero::after { content: none; }
+.library-eyebrow { color: #7a876e; font-size: 10px; margin-bottom: 10px; }
+#library .library-heading h1 { color: #293f31; -webkit-text-fill-color: currentColor; background: none; font-size: 32px; font-weight: 700; line-height: 1.5; margin: 0; }
+#library .library-heading .subtitle { margin-top: 8px; font-size: 12px; color: #858779; opacity: 1; }
+#library .btn-primary, #join-dialog .btn-primary { background: #315b40; color: #fffdf0; border: 1px solid #315b40; box-shadow: none; border-radius: 7px; font-weight: 500; }
+#library .btn-primary:hover, #join-dialog .btn-primary:hover { background: #244730; box-shadow: none; transform: none; }
+#library #open-join-btn { border: 1px solid #c5ccba; background: transparent; color: #315b40; padding: 12px 18px; font-size: 12px; }
+#library #open-join-btn:hover { background: #ebeedf; }
+.library-section-heading { margin-bottom: 22px; }
+.library-section-heading h2 { font-size: 20px; font-weight: 700; }
+.library-section-heading h2 span { margin-left: 10px; padding: 3px 6px; border: 1px solid #cdd3bf; border-radius: 4px; font-size: 11px; font-weight: 400; color: #7f8c70; vertical-align: middle; }
+.library-section-heading p { margin-top: 8px; font-size: 11px; color: #909484; }
+#library .game-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; }
+#library .game-card { min-width: 0; padding: 0; gap: 0; border: 1px solid #e0e2d4; border-radius: 8px; background: #fffdf6; box-shadow: none; overflow: hidden; }
+#library .game-card::before, #library .game-card::after { content: none; }
+#library .game-card:hover { border-color: #c6cfb9; box-shadow: none; transform: none; }
+.library-cover { position: relative; height: 220px; flex-shrink: 0; overflow: hidden; background: #dce4c8; color: #38553a; padding: 18px 21px; }
+.library-card-red7 .library-cover { background: #e5b79d; color: #614b3c; }
+.library-card-regicide .library-cover { background: #cddfe0; color: #35525b; }
+.library-card-presages .library-cover { background: #ded9e8; color: #5a4d68; }
+.library-cover-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 9px; }
+.library-cover-top > span:first-child { background: #fffdf673; border-radius: 4px; padding: 4px 8px; }
+.library-cover-top > span:last-child { font-size: 8px; }
+.library-cover-title { position: absolute; left: 22px; top: 72px; font-size: 28px; font-weight: 800; transform: rotate(-5deg); }
+.library-cover-hand { position: absolute; right: 30px; top: 65px; width: 150px; height: 125px; }
+.library-cover-card { position: absolute; width: 66px; height: 100px; border: 3px solid #fffbed; border-radius: 6px; display: grid; place-items: center; box-shadow: 0 5px 12px #37482b22; font: 700 27px Georgia, serif; background: #acbd83; color: #334e35; }
+.library-cover-card:nth-child(1) { left: 0; top: 12px; transform: rotate(-21deg); }
+.library-cover-card:nth-child(2) { left: 43px; top: 0; transform: rotate(-3deg); background: #f0b5a9; }
+.library-cover-card:nth-child(3) { left: 86px; top: 12px; transform: rotate(17deg); background: #edcc77; }
+.library-crest img { width: 44px; height: 44px; object-fit: contain; }
+.library-card-regicide .library-cover-card { background: #fffdf6; color: #334b4f; font-size: 22px; }
+.library-card-regicide .library-cover-card:first-child { color: #b34848; }
+.library-omen { object-fit: cover; }
+.library-cover-caption { position: absolute; bottom: 16px; left: 22px; font-size: 10px; }
+#library .game-card-body { padding: 20px 21px 0; flex: 1; }
+.library-title-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+#library .game-card-title { font-size: 18px; color: #293f31; font-weight: 700; }
+.library-available { font-size: 10px; color: #759167; white-space: nowrap; }
+.library-available::before { content: ''; display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: #759167; margin-right: 5px; vertical-align: middle; }
+#library .game-card-tagline { background: #f0f1e8; border: none; color: #7c876f; font-size: 10px; border-radius: 4px; margin: 12px 0 0; padding: 4px 7px; }
+#library .game-card-desc { font-size: 12px; color: #858b7a; opacity: 1; line-height: 1.8; margin-top: 12px; }
+#library .library-create-btn { width: calc(100% - 42px); margin: 20px 21px 21px; min-height: 44px; font-size: 12px; }
+.library-footer { display: flex; justify-content: space-between; gap: 16px; padding: 25px 0; border-top: 1px solid #e3e4d8; color: #939d88; font-size: 10px; }
+#library-status { color: #a3483b; }
+body.library-home #join-dialog { background: #fffdf6; border-color: #d6dbca; color: #293f31; }
+body.library-home #join-dialog input { background: #f6f4ed; color: #293f31; border-color: #d6dbca; }
+body.library-home #join-dialog .btn-ghost { color: #315b40; border-color: #c5ccba; }
+body.library-home #join-status { color: #a3483b; }
+@media (min-width: 701px) and (max-width: 1100px) {
+  .library-sidebar { width: 190px; padding: 32px 18px; }
+  .library-workspace { margin-left: 190px; }
+  .library-content { padding: 32px 24px 0; }
+  .library-topbar { padding: 16px 24px; }
+  .library-cover { height: 240px; }
+  .library-cover-title { top: 56px; font-size: 24px; }
+  .library-cover-hand { top: 105px; right: 22px; }
+}
+@media (max-width: 700px) {
+  .library-sidebar, .library-breadcrumb { display: none; }
+  .library-workspace { margin-left: 0; }
+  .library-top-brand { display: block; }
+  .library-topbar { padding: 16px 20px; min-height: 76px; gap: 12px; }
+  #library .library-nickname { gap: 8px; font-size: 11px; }
+  #library .library-nickname input { width: 88px; }
+  .library-content { padding: 28px 20px 0; }
+  #library .library-heading h1 { font-size: 24px; }
+  #library .library-hero { align-items: center; gap: 12px; margin-bottom: 30px; }
+  .library-eyebrow { font-size: 8px; }
+  #library .library-heading .subtitle { font-size: 11px; }
+  #library #open-join-btn { padding: 10px 12px; }
+  #library .game-grid { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .library-cover { height: 220px; }
+  .library-cover-title { font-size: 26px; }
+  .library-cover-hand { right: 24px; }
+  .library-footer { font-size: 9px; }
+}
+@media (max-width: 360px) {
+  .library-content { padding-left: 14px; padding-right: 14px; }
+  .library-cover-title { top: 57px; font-size: 24px; }
+  .library-cover-hand { top: 95px; right: 22px; }
+  .library-cover { height: 245px; }
+  #library .library-heading h1 { font-size: 21px; }
+}

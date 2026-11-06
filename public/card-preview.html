@@ -3,9 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>卡牌预览 · Quanc</title>
+  <title>四款游戏 · 卡牌图鉴</title>
   <link rel="stylesheet" href="css/base.css" />
   <link rel="stylesheet" href="css/quanc.css" />
+  <link rel="stylesheet" href="css/red7.css" />
+  <link rel="stylesheet" href="css/regicide.css" />
+  <link rel="stylesheet" href="css/presages.css" />
+  <link rel="stylesheet" href="css/card-designs.css?v=2" />
   <style>
     .preview { max-width: 1240px; margin: 0 auto; padding: 20px; padding-bottom: calc(20px + env(safe-area-inset-bottom)); }
     .preview h1 { font-size: 24px; margin-bottom: 4px; }
@@ -23,13 +27,35 @@
     .type-cell { display: flex; flex-direction: column; gap: 8px; align-items: center; }
     .type-name { font-size: 13px; font-weight: 600; opacity: 0.85; }
     .card-pair { display: flex; flex-direction: column; gap: 12px; align-items: center; }
+    body { background: #141c20; color: #edf1f2; }
+    .preview { max-width: 1100px; }
+    .preview h1 { font-size: 28px; }
+    .preview-nav { display: flex; flex-wrap: wrap; gap: 18px; padding: 16px 0; margin-bottom: 20px; border-bottom: 1px solid #ffffff26; }
+    a { color: #c4ddcf; text-underline-offset: 5px; }
+    .collection { padding: 22px 0; border-bottom: 1px solid #ffffff26; scroll-margin-top: 16px; }
+    .collection h2 { font-size: 20px; margin-bottom: 20px; }
+    .collection h2 small { display: inline-block; font-size: 12px; font-weight: 400; color: #a3b3b9; margin-left: 12px; }
+    .sample-row { display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-start; padding: 10px 4px 18px; }
+    .family-section { padding-top: 12px; }
+    .type-grid { gap: 18px; padding: 8px 4px; }
+    .type-name { color: #c0ccd1; }
+    @media (max-width: 480px) {
+      .preview { padding: 16px 12px; }
+      .preview h1 { font-size: 24px; }
+      .collection h2 small { display: block; margin: 5px 0 0; }
+      .sample-row, .type-grid { gap: 14px; }
+    }
   </style>
 </head>
 <body>
   <div class="preview">
-    <h1>卡牌预览</h1>
-    <p class="sub">6 个家族 × 5 个类型（刺客 / 间谍 / 贵族 / 守卫 / 平民）· 每类含大卡与区域小卡</p>
-    <div id="preview"></div>
+    <a href="/">← 游戏库</a>
+    <h1 style="margin-top:20px">卡牌图鉴</h1>
+    <nav class="preview-nav" aria-label="游戏"><a href="#quanc">Quanc</a><a href="#red7">Red7</a><a href="#regicide">Regicide</a><a href="#presages">Presages</a></nav>
+    <section class="collection" id="red7"><h2>Red7 <small>色谱 · 数字与规则</small></h2><div class="sample-row" id="r7-samples"></div></section>
+    <section class="collection" id="regicide"><h2>Regicide <small>宫廷 · 纸质与花色</small></h2><div class="sample-row" id="rg-samples"></div></section>
+    <section class="collection" id="presages"><h2>Presages <small>秘境 · 插画与预兆</small></h2><div class="sample-row" id="ps-samples"></div></section>
+    <section class="collection" id="quanc"><h2>Quanc <small>纹章 · 六大家族</small></h2><div id="preview"></div></section>
   </div>
 
   <script>
@@ -144,6 +170,33 @@
         </div>
       </section>
     `;
+  </script>
+  <script>
+    const pair = (large, mini) => `<div class="card-pair">${large}${mini}</div>`;
+    const colors = ['#d93942','#ef8c30','#e3bd22','#409d68','#389fba','#455eb0','#9953ad'];
+    const names = ['红','橙','黄','绿','蓝','靛','紫'];
+    document.querySelector('#r7-samples').innerHTML = colors.map((c,i) => {
+      const node = mini => `<div class="r7-card ${mini ? 'r7-card-mini' : ''}" style="--c:${c}"><div class="r7-num">${7-i}</div><div class="r7-color">${names[i]}</div></div>`;
+      return pair(node(false),node(true));
+    }).join('');
+    document.querySelector('#rg-samples').innerHTML = ['♥','♦','♣','♠','JOKER'].map((s,i) => {
+      const node = mini => `<div class="rg-card ${mini ? 'rg-card-mini' : ''} ${i===4 ? 'rg-card-joker' : ''}" style="--c:${i<2 ? '#c32f48' : '#283a42'}"><div class="rg-num">${['A','10','J','K','★'][i]}</div><div class="rg-suit">${s}</div></div>`;
+      return pair(node(false),node(true));
+    }).join('');
+    const omens = [[1,'生命','#3f9b4f','弃掉数值最高的绿色牌。'],[10,'谜','#d9ae2e','场上若有至少一张绝对牌（30-35），弃掉此牌。'],[17,'狡黠','#8a5cc9','此牌属于所有颜色（绿、黄、红、蓝）。'],[26,'悲伤','#3f78c9','忽略数值最高的牌。']];
+    document.querySelector('#ps-samples').innerHTML = omens.map(([n,name,c,effect]) => {
+      const node = mini => `<div class="ps-card ps-card-art ps-card-n${n} ${mini ? 'ps-card-mini' : ''}" style="--c:${c}">${mini ? `<div class="ps-corner">${n}</div><div class="ps-name">${name}</div>` : `<div class="ps-head"><div class="ps-corner">${n}</div><div class="ps-name">${name}</div><div class="ps-sym"><img src="assets/沙漏.svg" width="14" height="14" alt="回合结束" /></div></div><div class="ps-effect">${effect}</div>`}</div>`;
+      return pair(node(false),node(true));
+    }).join('');
+    for (const card of document.querySelectorAll('.card, .r7-card, .rg-card, .ps-card')) {
+      const selectedClass = card.classList.contains('r7-card') ? 'r7-card-selected' : card.classList.contains('rg-card') ? 'rg-card-selected' : card.classList.contains('ps-card') ? 'ps-card-selected' : 'card-selected';
+      card.setAttribute('role','button'); card.tabIndex = 0;
+      card.setAttribute('aria-label', card.textContent.trim() || '牌背');
+      card.setAttribute('aria-pressed','false');
+      const toggle = () => card.setAttribute('aria-pressed', String(card.classList.toggle(selectedClass)));
+      card.addEventListener('click',toggle);
+      card.addEventListener('keydown',e => { if(e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
+    }
   </script>
 </body>
 </html>

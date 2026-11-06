@@ -4,6 +4,7 @@
  */
 
 import { Client } from 'boardgame.io/client';
+import { isValidPlayerName, randomPlayerName, PLAYER_NAME_ERROR } from './player-name.js';
 import { SocketIO } from 'boardgame.io/multiplayer';
 import { QuancGame, computeFamilyFates, pLabel, getTask } from './quanc.js';
 import { Red7Game, RED7_COLORS, computeWinningIds, ruleKeyCards, effectiveRuleIndex } from './red7.js';
@@ -22,6 +23,7 @@ import { FAMILY_ICONS, TYPE_ICONS, BACK_EMBLEM, PRESAGES_TIMING_ICONS } from './
 const API_BASE = `${window.location.protocol}//${window.location.host}`;
 /** 会话存储键：保存当前房间与座位凭证，用于刷新后自动恢复。 */
 const SESSION_KEY = 'quanc_session';
+const PLAYER_NAME_KEY = 'quanc_player_name';
 
 let client = null;
 let currentState = null;     // 最近一次渲染所用的状态
@@ -38,7 +40,7 @@ let prevEnded = false;       // 上一帧是否已结束（用于一次性触发
 let justEnded = false;       // 本帧是否为游戏结束瞬间
 let prevCardLocations = new Map(); // 上一帧的「卡牌 id → 逻辑位置」映射，用于 diff 出移动/新增/消失以播放飞行动画
 const loadedCSS = new Set(); // 已动态加载的游戏 CSS 路径（去重）
-const CSS_VERSION = '61';     // CSS 版本号：样式更新时递增，防止浏览器缓存旧样式
+const CSS_VERSION = '63';     // CSS 版本号：样式更新时递增，防止浏览器缓存旧样式
 let rgSelected = [];         // Regicide 手牌多选索引（连招 / 承伤弃牌共用）
 let prevRgForced = false;    // Regicide 上一帧是否处于强制结算（用于自动定位只触发一次）
 let psSelected = null;       // Presages 当前选中的手牌索引
@@ -185,9 +187,9 @@ async function leaveMatch(matchID, playerID, credentials) {
 // ---------- 家族 / 卡牌渲染 ----------
 
 function fateLabel(fate) {
-  if (fate === 'favored') return { text: '得宠', cls: 'fate-favored' };
-  if (fate === 'disfavored') return { text: '失宠', cls: 'fate-disfavored' };
-  return { text: '中立', cls: 'fate-neutral' };
+  if (fate === 'favored') return { text: '↑', label: '得宠', cls: 'fate-favored' };
+  if (fate === 'disfavored') return { text: '↓', label: '失宠', cls: 'fate-disfavored' };
+  return { text: '−', label: '中立', cls: 'fate-neutral' };
 }
 
 /** 手牌（较大）：家族 + 类型，间谍在自己手中可见 */
@@ -398,7 +400,7 @@ function renderTable(G, fates) {
     return el('div', { class: `board-head-cell ${lbl.cls}`, style: `--c:${f.color}` }, [
       el('span', { class: 'chip-icon' }, [svgNode(FAMILY_ICONS[f.id])]),
       el('span', { class: 'board-head-name', text: f.name }),
-      el('span', { class: 'fate-badge', text: lbl.text }),
+      el('span', { class: 'fate-badge', text: lbl.text, title: lbl.label, 'aria-label': lbl.label }),
     ]);
   });
 
@@ -829,7 +831,7 @@ function renderGameover(G) {
       return el('div', { class: `go-fam-cell ${lbl.cls}` }, [
         el('span', { class: 'go-fam-icon', style: `--c:${f.color}` }, [svgNode(FAMILY_ICONS[f.id])]),
         el('span', { class: 'go-fam-label', text: f.name }),
-        el('span', { class: 'fate-badge', text: lbl.text }),
+        el('span', { class: 'fate-badge', text: lbl.text, title: lbl.label, 'aria-label': lbl.label }),
       ]);
     }),
     el('div', { class: 'go-fam-total', text: '领地分' }),
@@ -2762,7 +2764,8 @@ function renderLobby(state) {
   const allOnline = filledSeats.every(s => s.isConnected === true);
   const allReady = filledSeats.every(s => readyMap[String(s.id)]);
   const canStart = joined >= minStart && allOnline && allReady;
-  const isHost = roomInfo && roomInfo.playerID === '0';
+  const hostID = String(state.G.hostID ?? '0');
+  const isHost = roomInfo && roomInfo.playerID === hostID;
 
   countEl.textContent = `玩家 ${joined}/${total} · ${canStart ? '全员就位，可以开局' : joined < minStart ? `至少 ${minStart} 人开局` : '等待就位'}`;
 
@@ -2778,7 +2781,7 @@ function renderLobby(state) {
     if (ready) cls.push('ready');
 
     const badges = [];
-    if (s.id === 0) badges.push(el('span', { class: 'badge badge-host', text: '房主' }));
+    if (String(s.id) === hostID) badges.push(el('span', { class: 'badge badge-host', text: '房主' }));
     if (isMe) badges.push(el('span', { class: 'badge badge-me', text: '你' }));
 
     let stateText = '空位 · 等待加入';
@@ -2916,22 +2919,41 @@ async function restoreSession() {
 function renderLibrary() {
   const grid = $('#game-grid');
   grid.innerHTML = '';
-  for (const g of GAMES) {
+  for (const [index, g] of GAMES.entries()) {
     grid.appendChild(el('div', {
-      class: 'game-card',
+      class: `game-card library-card-${g.template.replace('template-', '')}`,
       style: `--c:${g.color}`,
-      role: 'button',
-      tabindex: '0',
-      onClick: () => selectGame(g),
     }, [
-      el('div', { class: 'game-card-icon', text: g.icon }),
+      libraryCover(g, index),
       el('div', { class: 'game-card-body' }, [
-        el('div', { class: 'game-card-title', text: g.title }),
+        el('div', { class: 'library-title-row' }, [
+          el('h3', { class: 'game-card-title', text: g.title }),
+          el('span', { class: 'library-available', text: '可联机' }),
+        ]),
         el('div', { class: 'game-card-tagline', text: g.tagline }),
         el('div', { class: 'game-card-desc', text: g.description }),
       ]),
+      el('button', { class: 'btn btn-primary library-create-btn', text: '创建房间', onClick: () => createLibraryRoom(g) }),
     ]));
   }
+}
+
+function libraryCover(game, index) {
+  const key = game.template.replace('template-', '');
+  const artwork = key === 'quanc'
+    ? ['狮', '鹰', '鹿'].map(name => el('div', { class: 'library-cover-card library-crest' }, [el('img', { src: `assets/${name}.svg`, alt: '' })]))
+    : key === 'presages'
+      ? [1, 17, 26].map(number => el('img', { class: 'library-cover-card library-omen', src: `assets/presages/${number}.webp`, alt: '' }))
+      : (key === 'red7' ? ['7', '5', '3'] : ['A ♥', 'J ♣', 'K ♠']).map(text => el('div', { class: 'library-cover-card', text }));
+  return el('div', { class: 'library-cover', 'aria-hidden': 'true' }, [
+    el('div', { class: 'library-cover-top' }, [
+      el('span', { text: key === 'regicide' ? '合作挑战' : key === 'presages' ? '团队策略' : '卡牌桌游' }),
+      el('span', { text: `0${index + 1} / CARD GAME` }),
+    ]),
+    el('span', { class: 'library-cover-title', text: game.title.toUpperCase() }),
+    el('div', { class: 'library-cover-hand' }, artwork),
+    el('span', { class: 'library-cover-caption', text: ['六大家族 · 暗流涌动', '七种颜色 · 无尽变化', '齐心协力 · 挑战王权', '奥秘小队 · 默契对决'][index] }),
+  ]);
 }
 
 /** 按需加载游戏专属 CSS（base.css 已静态引入，游戏 CSS 首次需要时动态注入；带版本号防浏览器缓存）。 */
@@ -2942,7 +2964,7 @@ function ensureGameCSS(game) {
   const link = document.createElement('link');
   link.rel = 'stylesheet';
   link.href = `${css}?v=${CSS_VERSION}`;
-  document.head.appendChild(link);
+  document.head.insertBefore(link, document.getElementById('card-designs'));
 }
 
 /** 按当前游戏把对应的 <template> 注入到游戏界面容器。 */
@@ -2954,50 +2976,24 @@ function mountGameTemplate(game) {
   if (tpl) body.appendChild(tpl.content.cloneNode(true));
 }
 
-/** 选中某个游戏，进入其创建 / 加入界面。 */
-function selectGame(game) {
-  currentGame = game;
-  ensureGameCSS(game);
-  $('#setup-status').textContent = '';
-  renderSetupHeader();
-  showSetupScreen();
-}
-
-/** 根据当前选中的游戏刷新设置界面标题。 */
-function renderSetupHeader() {
-  const g = currentGame;
-  $('#setup-game-title').textContent = g ? g.title : '选择游戏';
-  $('#setup-game-subtitle').textContent = g ? g.tagline : '';
-  const hint = $('#setup-hint');
-  if (hint) {
-    hint.textContent = `提示：创建房间后，把对局 ID 发给好友；好友粘贴 ID 即可加入（自动分配空座位）。${playerRange()}就位后，由房主开始游戏。可在多个浏览器标签页加入同一房间模拟多名玩家。`;
-  }
-}
-
 // ---------- 进入房间 / 切换界面 ----------
 
 function showLibraryScreen() {
+  document.body.classList.add('library-home');
   inGameScreen = false;
-  $('#setup').style.display = 'none';
+  $('#join-dialog').close();
   $('#lobby').style.display = 'none';
   $('#game').style.display = 'none';
   $('#library').style.display = 'block';
   renderLibrary();
 }
 
-function showSetupScreen() {
-  inGameScreen = false;
-  $('#library').style.display = 'none';
-  $('#lobby').style.display = 'none';
-  $('#game').style.display = 'none';
-  $('#setup').style.display = 'block';
-}
-
 function showLobbyScreen() {
+  document.body.classList.remove('library-home');
   inGameScreen = false;
   hideEndTurnHint(); // 返回大厅时清除可能残留的结束回合提示
   $('#library').style.display = 'none';
-  $('#setup').style.display = 'none';
+  $('#join-dialog').close();
   $('#game').style.display = 'none';
   $('#lobby').style.display = 'block';
   const subtitle = $('#lobby-subtitle');
@@ -3005,6 +3001,7 @@ function showLobbyScreen() {
 }
 
 function showGameScreen() {
+  document.body.classList.remove('library-home');
   if (!inGameScreen) {
     inGameScreen = true;
     resetRed7Selection();
@@ -3012,17 +3009,29 @@ function showGameScreen() {
     resetPresagesSelection();
     mountGameTemplate(currentGame);
     $('#library').style.display = 'none';
-    $('#setup').style.display = 'none';
+    $('#join-dialog').close();
     $('#lobby').style.display = 'none';
     $('#game').style.display = 'block';
   }
   $('#game-title').textContent = currentGame ? currentGame.title : '';
   $('#match-id').textContent = currentMatchID;
-  // 进行中仅房主（座位 0）可结束；本局结束后所有玩家都可返回房间大厅
-  const isHost = !!roomInfo && roomInfo.playerID === '0';
+  // 进行中仅当前房主可结束；本局结束后所有玩家都可返回房间大厅
+  const isHost = !!roomInfo && roomInfo.playerID === String(currentState?.G.hostID ?? '0');
   const isGameover = !!(currentState && currentState.G && currentState.G.results);
   $('#end-game-btn').style.display = (isHost || isGameover) ? '' : 'none';
   $('#end-game-btn').textContent = isGameover ? '回到房间' : '结束游戏';
+}
+
+function roomTransport(options) {
+  const transport = SocketIO({ server: API_BASE })(options);
+  const connect = transport.connect.bind(transport);
+  transport.connect = () => {
+    connect();
+    transport.socket.on('roomClosed', (matchID, { message }) => {
+      if (currentMatchID === matchID) resetToLibrary(message || '房间已关闭。');
+    });
+  };
+  return transport;
 }
 
 /** 创建 / 加入成功后进入房间：立刻建立游戏连接，在大厅阶段等待房主开始。 */
@@ -3043,7 +3052,7 @@ function enterRoom(matchID, playerID, credentials, playerName) {
     matchID,
     playerID,
     credentials,
-    multiplayer: SocketIO({ server: `${window.location.hostname}:${window.location.port}` }),
+    multiplayer: roomTransport,
     // 关闭 boardgame.io 内置调试面板（Controls/Players/Moves/G/ctx）
     debug: false,
   });
@@ -3117,44 +3126,86 @@ function resetToLibrary(message) {
 
 // ---------- 设置界面事件 ----------
 
-function bindSetupEvents() {
-  $('#back-to-library').addEventListener('click', () => {
-    currentGame = null;
-    showLibraryScreen();
-  });
+let libraryBusy = false;
+function setLibraryBusy(busy) {
+  libraryBusy = busy;
+  for (const button of document.querySelectorAll('.library-create-btn, #open-join-btn, #join-btn, #close-join-btn')) button.disabled = busy;
+  $('#player-name').disabled = busy;
+}
 
-  $('#create-btn').addEventListener('click', async () => {
-    const playerName = $('#player-name').value.trim();
-    const status = $('#setup-status');
-    if (!playerName) {
-      status.textContent = '请先填写昵称';
+async function createLibraryRoom(game) {
+  if (libraryBusy) return;
+  const status = $('#library-status');
+  const playerName = $('#player-name').value.trim();
+  if (!isValidPlayerName(playerName)) {
+    status.textContent = PLAYER_NAME_ERROR;
+    $('#player-name').focus();
+    return;
+  }
+  setLibraryBusy(true);
+  currentGame = game;
+  status.textContent = '正在创建房间…';
+  try {
+    const matchID = await createMatch();
+    const { playerID, credentials } = await joinMatch(matchID, playerName, 0);
+    status.textContent = '';
+    enterRoom(matchID, playerID, credentials, playerName);
+  } catch (e) {
+    status.textContent = `创建失败：${e.message}`;
+  } finally {
+    setLibraryBusy(false);
+  }
+}
+
+function bindSetupEvents() {
+  const nameInput = $('#player-name');
+  let savedName;
+  try { savedName = localStorage.getItem(PLAYER_NAME_KEY); } catch { /* Storage may be unavailable. */ }
+  const previousName = loadSession()?.playerName;
+  nameInput.value = isValidPlayerName(savedName) ? savedName
+    : isValidPlayerName(previousName) ? previousName : randomPlayerName();
+  const persistName = () => {
+    if (!isValidPlayerName(nameInput.value)) return;
+    try { localStorage.setItem(PLAYER_NAME_KEY, nameInput.value); } catch { /* Keep the in-memory value. */ }
+  };
+  persistName();
+  nameInput.addEventListener('input', persistName);
+  nameInput.addEventListener('compositionend', persistName);
+  $('#open-join-btn').addEventListener('click', () => {
+    if (!isValidPlayerName(nameInput.value.trim())) {
+      $('#library-status').textContent = PLAYER_NAME_ERROR;
+      nameInput.focus();
       return;
     }
-    status.textContent = '正在创建房间…';
-    try {
-      const matchID = await createMatch();
-      const { playerID, credentials } = await joinMatch(matchID, playerName, 0);
-      status.textContent = '';
-      enterRoom(matchID, playerID, credentials, playerName);
-    } catch (e) {
-      status.textContent = `创建失败：${e.message}`;
-    }
+    $('#library-status').textContent = '';
+    $('#join-status').textContent = '';
+    $('#join-dialog').showModal();
+    $('#join-match').focus();
   });
-
-  $('#join-btn').addEventListener('click', async () => {
+  $('#close-join-btn').addEventListener('click', () => $('#join-dialog').close());
+  $('#join-dialog').addEventListener('cancel', event => { if (libraryBusy) event.preventDefault(); });
+  $('#join-form').addEventListener('submit', async event => {
+    event.preventDefault();
+    if (libraryBusy) return;
     const matchID = $('#join-match').value.trim();
     const playerName = $('#player-name').value.trim();
-    const status = $('#setup-status');
-    if (!playerName) {
-      status.textContent = '请先填写昵称';
+    const status = $('#join-status');
+    if (!isValidPlayerName(playerName)) {
+      status.textContent = PLAYER_NAME_ERROR;
       return;
     }
-    if (!matchID) {
-      status.textContent = '请输入对局 ID';
+    if (!/^\d{4}$/.test(matchID)) {
+      status.textContent = '请输入4位对局 ID';
       return;
     }
+    setLibraryBusy(true);
     status.textContent = '正在加入房间…';
     try {
+      const response = await fetch(`${API_BASE}/rooms/${matchID}`);
+      if (!response.ok) throw new Error(await readErrorMessage(response, '查询房间失败'));
+      const { gameName: targetGame } = await response.json();
+      currentGame = getGame(targetGame);
+      if (!currentGame) throw new Error('房间游戏不可用');
       // 不传座位号：由服务端自动分配第一个空座位
       const { playerID, credentials } = await joinMatch(matchID, playerName);
       status.textContent = '';
@@ -3162,6 +3213,8 @@ function bindSetupEvents() {
       enterRoom(matchID, playerID, credentials, playerName);
     } catch (e) {
       status.textContent = `加入失败：${e.message}`;
+    } finally {
+      setLibraryBusy(false);
     }
   });
 }
@@ -3222,7 +3275,7 @@ function bindGameEvents() {
       return;
     }
     // 进行中：仅房主可结束，并通过 move 广播给所有玩家统一返回房间大厅
-    if (!roomInfo || roomInfo.playerID !== '0') return;
+    if (!roomInfo || roomInfo.playerID !== String(currentState?.G.hostID ?? '0')) return;
     if (!window.confirm('确定要结束本局吗？本局信息将被清除且不做结算，所有玩家将回到房间大厅。')) return;
     client.moves.backToLobby();
   });

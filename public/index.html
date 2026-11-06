@@ -4,49 +4,52 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>游戏合集</title>
-  <link rel="stylesheet" href="css/base.css?v=13" />
+  <link rel="stylesheet" href="css/base.css?v=14" />
+  <link id="card-designs" rel="stylesheet" href="css/card-designs.css?v=2" />
+  <link rel="stylesheet" href="css/library.css?v=1" />
+  <link rel="stylesheet" href="css/table-theme.css?v=4" />
 </head>
 <body>
   <!-- 游戏库：选择游戏 -->
   <section id="library" class="screen">
+    <aside class="library-sidebar">
+      <a class="library-brand" href="/" aria-label="游戏盒子首页"><span class="library-brand-mark">✳</span><span>一起玩<small>PLAYBOX</small></span></a>
+      <p class="library-side-caption">LET’S HANG OUT</p>
+      <nav aria-label="首页导航"><a class="library-nav-active" href="#game-grid"><span aria-hidden="true">▦</span>游戏大厅<span class="library-nav-count">04</span></a></nav>
+      <div class="library-side-bottom"><p>好朋友，<br />就要一起玩。</p><span>PLAY MORE. TOGETHER.</span></div>
+    </aside>
+    <div class="library-workspace">
+    <div class="library-topbar"><a href="/" class="library-top-brand">一起玩 <small>PLAYBOX</small></a><span class="library-breadcrumb">游戏盒子 <span>/</span> 发现好游戏</span><label class="library-nickname">你的昵称
+      <input id="player-name" type="text" placeholder="1至4个中文或英文字母" maxlength="4" autocomplete="nickname" />
+    </label></div>
+    <div class="library-content">
     <header class="library-hero">
       <div class="library-heading">
-        <h1>游戏库</h1>
-        <p class="subtitle">挑一款喜欢的游戏，和朋友一起开局</p>
+        <p class="library-eyebrow">A LITTLE PLAY, A LOT OF JOY</p>
+        <h1>好朋友，开一局。</h1>
+        <p class="subtitle">把朋友聚在一起，把无聊留在外面。</p>
       </div>
-      <div class="library-mark" aria-hidden="true">🎴</div>
+      <button id="open-join-btn" class="btn btn-primary">加入房间</button>
     </header>
+    <div class="library-section-heading"><h2>挑一款，快乐就位 <span>04</span></h2><p>每一局，都是聚在一起的好理由。</p></div>
     <div id="game-grid" class="game-grid"></div>
-    <div id="library-status" class="status"></div>
+    <div id="library-status" class="status" role="status"></div>
+    <footer class="library-footer"><span>PLAY MORE. TOGETHER.</span><span>让快乐，发生在一起。</span></footer>
+    </div>
+    </div>
   </section>
 
-  <!-- 设置界面：创建 / 加入对局 -->
-  <section id="setup" class="screen" style="display:none;">
-    <div class="screen-topbar">
-      <button id="back-to-library" class="btn btn-ghost">← 返回游戏库</button>
-    </div>
-    <h1 id="setup-game-title">游戏</h1>
-    <p class="subtitle" id="setup-game-subtitle"></p>
-
-    <div class="setup-grid">
-      <div class="setup-card">
-        <h2>开始游戏</h2>
-        <label>你的昵称（必填）
-          <input id="player-name" type="text" placeholder="请输入昵称" maxlength="12" />
-        </label>
-        <label>对局 ID（填写则加入好友房间，留空则创建新房间）
-          <div class="join-row">
-            <input id="join-match" type="text" placeholder="例如：1234" maxlength="4" inputmode="numeric" />
-            <button id="join-btn" class="btn">加入房间</button>
-          </div>
-        </label>
-        <button id="create-btn" class="btn btn-primary">创建房间</button>
-      </div>
-    </div>
-
-    <div id="setup-status" class="status"></div>
-    <p id="setup-hint" class="hint-msg">提示：创建房间后，把对局 ID 发给好友；好友粘贴 ID 即可加入（自动分配空座位）。</p>
-  </section>
+  <!-- 首页加入房间 -->
+  <dialog id="join-dialog" aria-labelledby="join-title">
+    <form id="join-form">
+      <div class="join-dialog-head"><h2 id="join-title">加入房间</h2><button id="close-join-btn" class="btn btn-ghost" type="button" aria-label="关闭">×</button></div>
+      <label>对局 ID
+        <input id="join-match" type="text" placeholder="例如：1234" maxlength="4" inputmode="numeric" pattern="[0-9]{4}" required />
+      </label>
+      <div id="join-status" class="status" role="status"></div>
+      <button id="join-btn" class="btn btn-primary" type="submit">加入房间</button>
+    </form>
+  </dialog>
 
   <!-- 房间等待界面：人数到齐后房主才能开始 -->
   <section id="lobby" class="screen" style="display:none;">
@@ -185,6 +188,6 @@
     </footer>
   </template>
 
-  <script src="client.js?v=93"></script>
+  <script src="client.js?v=102"></script>
 </body>
 </html>

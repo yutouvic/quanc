@@ -1,0 +1,69 @@
+/* Shared geometry; each game keeps its own information hierarchy. */
+.rg-card { --card-w: 88px; --card-h: 124px; }
+.rg-card, .ps-card {
+  flex-shrink: 0; border-radius: 7px; letter-spacing: 0;
+  box-shadow: 0 3px 5px #0003, 0 10px 20px #0003;
+  -webkit-tap-highlight-color: transparent;
+}
+.rg-card *, .ps-card * { letter-spacing: 0; }
+/* Regicide: paper stock, suit-colored engraving, framed court cards. */
+.rg-card {
+  background: #f4f3ef; border: 4px solid #f4f3ef;
+  outline: 1px solid #aaa89e; outline-offset: -1px;
+  color: color-mix(in srgb, var(--c) 75%, #15151a);
+  gap: 4px;
+}
+.rg-card::before { content: ''; position: absolute; inset: 3px; border: 1px solid currentColor; opacity: .35; pointer-events: none; }
+.rg-card::after { content: ''; width: 8px; height: 8px; border: 1px solid currentColor; transform: rotate(45deg); margin-top: 5px; }
+.rg-num { font-family: Georgia, serif; font-size: 42px; font-weight: 400; text-shadow: none; }
+.rg-suit { font-size: 17px; text-shadow: none; }
+.rg-card-joker { background: #252126; border-color: #252126; color: #eac678; }
+.rg-card-mini { border-width: 2px; gap: 1px; }
+.rg-card-mini .rg-num { font-size: 23px; }
+.rg-card-mini .rg-suit { font-size: 11px; }
+.rg-card-mini::after { display: none; }
+/* Presages: illustrated tarot, with a separate readable rules band. */
+.ps-card { width: 140px; height: 202px; padding: 6px; gap: 4px; border: 2px solid var(--c); background-color: #22272b; }
+.ps-card-art { background: linear-gradient(180deg, #0002, transparent 55%, #0007), var(--art) center / cover no-repeat; }
+.ps-head { gap: 3px; height: 24px; }
+.ps-head .ps-name { background: #141c22e8; border-radius: 3px; font-size: 12px; }
+.ps-head .ps-corner, .ps-head .ps-sym { border-radius: 3px; background: #141c22e8; }
+.ps-card:not(.ps-card-mini) .ps-effect {
+  aspect-ratio: auto; min-height: 66px; padding: 5px;
+  border-radius: 3px; background: #131b22ed; font-size: 10px;
+  line-height: 1.5; overflow: visible; text-shadow: none;
+}
+.ps-card-mini { width: var(--mini-w); height: var(--mini-h); padding: 16px 2px 5px; border-width: 1px; }
+.ps-card-mini .ps-name { background: #131b22dd; width: 100%; font-size: 9px; line-height: 1.4; }
+.ps-card-mini .ps-corner, .ps-card-mini .ps-sym {
+  top: 2px; width: 14px; height: 14px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; line-height: 1; background: #131b22cc;
+}
+.ps-card-mini .ps-corner { left: 2px; }
+.ps-card-mini .ps-sym { right: 2px; }
+.ps-card-mini .ps-sym svg, .ps-card-mini .ps-sym img { width: 11px; height: 11px; display: block; }
+.rg-card-selected, .ps-card-selected {
+  outline: 3px solid #f7d561; outline-offset: 2px;
+  box-shadow: 0 10px 20px #0005; transform: translateY(-6px);
+}
+.hand:has(.rg-card, .ps-card) { padding: 10px 4px 4px; }
+@media (max-width: 768px) {
+  .rg-card { --card-w: 72px; --card-h: 104px; }
+  .ps-card:not(.ps-card-mini) { width: 128px; height: 192px; }
+}
+@media (max-width: 480px) {
+  .rg-card { --card-w: 66px; --card-h: 96px; }
+  .rg-card, .ps-card { --mini-w: 40px; --mini-h: 58px; }
+  .rg-num { font-size: 32px; }
+  .rg-suit { font-size: 13px; }
+  .ps-card:not(.ps-card-mini) { width: 124px; height: 188px; }
+  .hand:has(.rg-card, .ps-card) { gap: 8px; }
+}
+@media (hover: none) {
+  .rg-card:hover, .ps-card:hover { transform: none; }
+  .rg-card-selected, .ps-card-selected { transform: translateY(-6px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rg-card, .ps-card { transition: none; }
+}

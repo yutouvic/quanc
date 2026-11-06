@@ -26,26 +26,19 @@
     var(--c) 36%,
     color-mix(in srgb, var(--c) 50%, #000 42%) 64%,
     color-mix(in srgb, var(--c) 68%, #fff 8%) 100%);
-  box-shadow:
-    0 8px 18px rgba(0,0,0,0.5),
-    0 2px 5px rgba(0,0,0,0.4),
-    0 0 0 1px color-mix(in srgb, var(--c) 40%, transparent);
+  box-shadow: none;
   cursor: pointer; user-select: none; position: relative;
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 .card:hover {
   transform: translateY(-6px);
-  box-shadow:
-    0 14px 26px rgba(0,0,0,0.55),
-    0 0 0 1px color-mix(in srgb, var(--c) 65%, #fff 12%),
-    0 0 16px color-mix(in srgb, var(--c) 45%, transparent);
+  box-shadow: none;
 }
 .card.card-selected {
   transform: translateY(-8px);
-  box-shadow:
-    0 0 0 3px #ffd966,
-    0 0 22px rgba(255,217,102,0.6),
-    0 12px 24px rgba(0,0,0,0.55);
+  box-shadow: none;
+  outline: 3px solid #c79a32;
+  outline-offset: 2px;
 }
 
 .card-frame {
@@ -193,6 +186,7 @@
 .board-head-cell .fate-badge {
   margin-top: 2px; padding: 1px 8px; border-radius: 999px;
   font-size: 11px; line-height: 1.4;
+  white-space: nowrap; flex-shrink: 0; max-width: 100%;
 }
 .board-head-cell.fate-favored .fate-badge { background: #2f7d4f; color: #eafff2; box-shadow: 0 1px 4px rgba(0,0,0,0.4); }
 .board-head-cell.fate-disfavored .fate-badge { background: #8a3b3b; color: #ffeaea; box-shadow: 0 1px 4px rgba(0,0,0,0.4); }
@@ -377,4 +371,26 @@
 /* 系统偏好「减少动态效果」时停用流光与翻牌，仅保留静态描边 */
 @media (prefers-reduced-motion: reduce) {
   .card.card-enter, .card.card-flip { animation: none; }
+}
+
+/* Enlarge hand cards without changing the compact board cards. */
+.card:not(.card-mini) { width: 104px; height: 144px; flex-shrink: 0; }
+.card:not(.card-mini) .card-frame { gap: 7px; }
+.card:not(.card-mini) .card-emblem { width: 64px; height: 64px; font-size: 44px; }
+.card:not(.card-mini) .card-fam { font-size: 16px; }
+.card:not(.card-mini) .card-type { font-size: 12px; }
+.board-head-cell:not(.board-head-spy) .chip-icon { color: var(--c); }
+.board-head-cell.fate-neutral { opacity: 1; }
+@media (max-width: 768px) {
+  .card:not(.card-mini) { width: 92px; height: 128px; }
+  .card:not(.card-mini) .card-frame { gap: 5px; }
+  .card:not(.card-mini) .card-emblem { width: 56px; height: 56px; font-size: 39px; }
+  .card:not(.card-mini) .card-fam { font-size: 14px; }
+}
+@media (max-width: 480px) {
+  .card:not(.card-mini) { width: 84px; height: 116px; }
+  .card:not(.card-mini) .card-frame { gap: 4px; }
+  .card:not(.card-mini) .card-emblem { width: 48px; height: 48px; font-size: 34px; }
+  .card:not(.card-mini) .card-type { font-size: 11px; }
+  .board-head-cell .fate-badge { padding: 1px 2px; font-size: 10px; }
 }

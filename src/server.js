@@ -16,6 +16,8 @@ import crypto from 'node:crypto';
 import serve from 'koa-static';
 import { Server } from 'boardgame.io/dist/cjs/server.js';
 import { GAMES } from './games.js';
+import { isValidPlayerName, PLAYER_NAME_ERROR } from './player-name.js';
+import { RoomLifecycle } from './room-lifecycle.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
@@ -44,6 +46,19 @@ const server = Server({
   apiOrigins: ['*'],
 });
 
+const rooms = new RoomLifecycle(server, usedMatchIDs);
+const addClient = server.transport.addClient.bind(server.transport);
+server.transport.addClient = (client, game) => {
+  addClient(client, game);
+  rooms.cancel(client.matchID, client.playerID);
+};
+const removeClient = server.transport.removeClient.bind(server.transport);
+server.transport.removeClient = socketID => {
+  const client = server.transport.clientInfo.get(socketID);
+  removeClient(socketID);
+  if (client) rooms.watch(client.matchID, client.playerID, client.credentials);
+};
+
 // 命名空间事件校验：boardgame.io 的对局数据库按 matchID 全局共享，重启后
 // 4 位随机 ID 可能被另一款游戏复用。若客户端用旧 matchID 自动重连到错误
 // 游戏的命名空间，sync 会拉到结构不匹配的 G，导致该游戏的 playerView 抛错。
@@ -55,8 +70,11 @@ for (const { game } of GAMES) {
       if (packet[0] !== 'sync') return next();
       try {
         const { metadata } = await server.db.fetch(packet[1], { metadata: true });
-        if (metadata && metadata.gameName && metadata.gameName !== game.name) {
-          // 静默丢弃：客户端未处理 socket error，避免无效对局被拉取
+        if (!metadata || rooms.closing.has(packet[1])) {
+          socket.emit('roomClosed', packet[1], { message: '房间已关闭，请重新创建或加入房间。' });
+          return;
+        }
+        if (metadata.gameName !== game.name) {
           return;
         }
       } catch {
@@ -77,23 +95,6 @@ function readRawBody(req) {
   });
 }
 
-/**
- * 同一房间的加入请求串行化。
- * 重名校验与真正的入座是两次异步读写，多标签页/并发请求可能同时通过校验，
- * 随后各自占用不同空座位，导致大厅出现两个相同昵称。
- */
-const joinLocks = new Map();
-
-function withMatchJoinLock(matchID, task) {
-  const prev = joinLocks.get(matchID) || Promise.resolve();
-  const run = prev.then(task, task);
-  const tail = run.catch(() => {});
-  joinLocks.set(matchID, tail);
-  return run.finally(() => {
-    if (joinLocks.get(matchID) === tail) joinLocks.delete(matchID);
-  });
-}
-
 // 房间加入拦截：
 // 1. 对局必须属于当前游戏名称（boardgame.io 的 matchID 在各游戏间共享数据库，
 //    重启后 4 位随机 ID 可能被其他游戏复用，跨游戏同步会让 playerView 拿到
@@ -107,7 +108,7 @@ server.app.middleware.unshift(async (ctx, next) => {
   if (ctx.method === 'POST' && match) {
     const gameName = decodeURIComponent(match[1]);
     const matchID = decodeURIComponent(match[2]);
-    await withMatchJoinLock(matchID, async () => {
+    await (async () => {
       const { state, metadata } = await server.db.fetch(matchID, {
         state: true,
         metadata: true,
@@ -133,6 +134,11 @@ server.app.middleware.unshift(async (ctx, next) => {
         body = {}; // 解析失败交由下游 koa-body 处理
       }
       const playerName = typeof body.playerName === 'string' ? body.playerName.trim() : '';
+      if (!isValidPlayerName(playerName)) {
+        ctx.status = 400;
+        ctx.body = PLAYER_NAME_ERROR;
+        return;
+      }
       if (playerName) {
         // metadata.players 为 { 座位号: { name, ... } } 的映射（也可能是数组），统一按值遍历
         const duplicated = Object.values(metadata?.players || {}).some(
@@ -147,14 +153,33 @@ server.app.middleware.unshift(async (ctx, next) => {
       // 校验通过：把已消费的请求体重放为新的流，供下游 koa-body 正常解析
       // （koa-body 从 ctx.req 读流并依赖 headers 判断类型，需一并保留）
       const replay = new PassThrough();
-      replay.headers = ctx.req.headers;
-      replay.end(raw);
+      const normalizedBody = Buffer.from(JSON.stringify({ ...body, playerName }));
+      replay.headers = { ...ctx.req.headers, 'content-length': String(normalizedBody.length) };
+      replay.end(normalizedBody);
       ctx.req = replay;
       await next();
-    });
+    })();
     return;
   }
   await next();
+});
+
+// Serialize membership changes with moves, then update host, readiness and timers.
+server.app.middleware.unshift(async (ctx, next) => {
+  const match = /^\/games\/([^/]+)\/([^/]+)\/(join|leave)$/.exec(ctx.path);
+  if (ctx.method !== 'POST' || !match) return next();
+  const gameName = decodeURIComponent(match[1]);
+  const matchID = decodeURIComponent(match[2]);
+  await rooms.enqueue(matchID, async () => {
+    const { metadata } = await server.db.fetch(matchID, { metadata: true });
+    if (metadata && metadata.gameName !== gameName) {
+      ctx.status = 404;
+      ctx.body = '房间不存在';
+      return;
+    }
+    await next();
+    if (ctx.status === 200) await rooms.refresh(matchID, gameName);
+  });
 });
 
 // 查询对局元数据拦截：对局必须属于 URL 中的游戏名称。
@@ -177,6 +202,21 @@ server.app.middleware.unshift(async (ctx, next) => {
 });
 
 // 托管前端静态资源（public/）
+server.app.use(async (ctx, next) => {
+  const match = /^\/rooms\/(\d{4})$/.exec(ctx.path);
+  if (ctx.method === 'GET' && match) {
+    const { metadata } = await server.db.fetch(match[1], { metadata: true });
+    if (!metadata || !GAMES.some(g => g.game.name === metadata.gameName)) {
+      ctx.status = 404;
+      ctx.body = '房间不存在，请检查对局 ID';
+      return;
+    }
+    ctx.body = { gameName: metadata.gameName };
+    return;
+  }
+  await next();
+});
+
 server.app.use(serve(PUBLIC_DIR));
 
 // SPA 回退：未匹配到静态文件时返回 index.html
@@ -205,6 +245,7 @@ console.log(`\n  按 Ctrl+C 停止服务器。\n`);
 
 // 优雅关闭
 const shutdown = async () => {
+  rooms.dispose();
   console.log('\n正在关闭服务器...');
   server.kill({ appServer });
   process.exit(0);

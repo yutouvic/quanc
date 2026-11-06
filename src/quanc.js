@@ -383,7 +383,7 @@ export const QuancGame = {
           client: false,
           move: ({ G, ctx, playerID, events, random }) => {
             if (!G.lobby || G.lobby.started) return INVALID_MOVE;
-            if (playerID !== '0') return INVALID_MOVE; // 仅房主（创建者，座位 0）
+            if (playerID !== (G.hostID ?? '0')) return INVALID_MOVE;
             const participants = Object.keys(G.lobby.ready).sort((a, b) => Number(a) - Number(b));
             const count = participants.length;
             if (count < 2 || count > ctx.numPlayers) return INVALID_MOVE; // 至少 2 人，不超过座位数
@@ -689,13 +689,15 @@ export const QuancGame = {
      */
     backToLobby: ({ G, ctx, playerID, events, random }) => {
       if (!G.lobby || !G.lobby.started) return INVALID_MOVE; // 大厅阶段不可用
-      if (!G.ended && playerID !== '0') return INVALID_MOVE; // 进行中仅房主可结束
+      if (!G.ended && playerID !== (G.hostID ?? '0')) return INVALID_MOVE;
+      const hostID = G.hostID ?? '0';
       const endedByHost = !G.ended;
       const fresh = freshQuancG(ctx, random, endedByHost
         ? '房主已结束本局，房间已重置，可开始新一局。'
         : '本局已结束，房间已重置，可开始新一局。');
       for (const k of Object.keys(G)) delete G[k];
       Object.assign(G, fresh);
+      G.hostID = hostID;
       events.setPhase('lobby');
       return undefined;
     },
