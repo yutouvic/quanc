@@ -24,25 +24,25 @@
 .rg-card-mini::after { display: none; }
 /* Presages: illustrated tarot, with a separate readable rules band. */
 .ps-card { width: 140px; height: 202px; padding: 6px; gap: 4px; border: 2px solid var(--c); background-color: #22272b; }
-.ps-card-art { background: linear-gradient(180deg, #0002, transparent 55%, #0007), var(--art) center / cover no-repeat; }
+.ps-card-art { background: linear-gradient(180deg, #0001, transparent 55%, #0005), var(--art) center / cover no-repeat; }
 .ps-head { gap: 3px; height: 24px; }
 .ps-head .ps-name { background: #141c22e8; border-radius: 3px; font-size: 12px; }
 .ps-head .ps-corner, .ps-head .ps-sym { border-radius: 3px; background: #141c22e8; }
 .ps-card:not(.ps-card-mini) .ps-effect {
-  aspect-ratio: auto; min-height: 66px; padding: 5px;
-  border-radius: 3px; background: #131b22ed; font-size: 10px;
-  line-height: 1.5; overflow: visible; text-shadow: none;
+  aspect-ratio: auto; height: calc(4.5em + 12px); min-height: calc(4.5em + 12px); padding: 5px;
+  border-radius: 3px; background: #131b2280; font-size: 10px;
+  line-height: 1.5; overflow: hidden; text-shadow: 0 1px 2px #000c;
 }
 .ps-card-mini { width: var(--mini-w); height: var(--mini-h); padding: 16px 2px 5px; border-width: 1px; }
 .ps-card-mini .ps-name { background: #131b22dd; width: 100%; font-size: 9px; line-height: 1.4; }
 .ps-card-mini .ps-corner, .ps-card-mini .ps-sym {
-  top: 2px; width: 14px; height: 14px;
+  top: 2px; width: var(--ps-marker-size); height: var(--ps-marker-size);
   display: flex; align-items: center; justify-content: center;
   font-size: 11px; line-height: 1; background: #131b22cc;
 }
 .ps-card-mini .ps-corner { left: 2px; }
 .ps-card-mini .ps-sym { right: 2px; }
-.ps-card-mini .ps-sym svg, .ps-card-mini .ps-sym img { width: 11px; height: 11px; display: block; }
+.ps-card-mini .ps-sym svg, .ps-card-mini .ps-sym img { width: var(--ps-timing-size); height: var(--ps-timing-size); display: block; }
 .rg-card-selected, .ps-card-selected {
   outline: 3px solid #f7d561; outline-offset: 2px;
   box-shadow: 0 10px 20px #0005; transform: translateY(-6px);

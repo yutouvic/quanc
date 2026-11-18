@@ -57,28 +57,51 @@
 .ps-card-multi { border-color: rgba(200,160,255,0.45); }
 
 /* 带实景图的卡面：按点数挂图（assets/presages/<点数>.webp），深色叠加保证白字可读。
- * 没有对应图片的点数不加 .ps-card-art，保持基础渐变卡面。 */
+ * 1–29 各有独立插画，30–35「绝对」共用 30.webp。 */
 .ps-card-art {
   background:
-    linear-gradient(180deg, rgba(10,12,16,0.58) 0%, rgba(10,12,16,0.44) 42%, rgba(10,12,16,0.62) 100%),
+    linear-gradient(180deg, rgba(10,12,16,0.42) 0%, rgba(10,12,16,0.28) 42%, rgba(10,12,16,0.46) 100%),
     var(--art) center / cover no-repeat;
   color: #f2f5fa;
 }
 .ps-card-art .ps-name,
 .ps-card-art .ps-effect,
 .ps-card-art .ps-corner { text-shadow: 0 1px 3px rgba(0,0,0,0.7); }
-.ps-card-n1  { --art: url('../assets/presages/1.webp'); }
-.ps-card-n5  { --art: url('../assets/presages/5.webp'); }
-.ps-card-n8  { --art: url('../assets/presages/8.webp'); }
+.ps-card-n1 { --art: url('../assets/presages/1.webp'); }
+.ps-card-n2 { --art: url('../assets/presages/2.webp'); }
+.ps-card-n3 { --art: url('../assets/presages/3.webp'); }
+.ps-card-n4 { --art: url('../assets/presages/4.webp'); }
+.ps-card-n5 { --art: url('../assets/presages/5.webp'); }
+.ps-card-n6 { --art: url('../assets/presages/6.webp'); }
+.ps-card-n7 { --art: url('../assets/presages/7.webp'); }
+.ps-card-n8 { --art: url('../assets/presages/8.webp'); }
+.ps-card-n9 { --art: url('../assets/presages/9.webp'); }
 .ps-card-n10 { --art: url('../assets/presages/10.webp'); }
-.ps-card-n13 { --art: url('../assets/presages/13.webp'); }
+.ps-card-n11 { --art: url('../assets/presages/11.webp'); }
+.ps-card-n12 { --art: url('../assets/presages/12.webp'); }
+.ps-card-n13 { --art: url('../assets/presages/13.webp?v=2'); }
+.ps-card-n14 { --art: url('../assets/presages/14.webp'); }
+.ps-card-n15 { --art: url('../assets/presages/15.webp'); }
+.ps-card-n16 { --art: url('../assets/presages/16.webp'); }
 .ps-card-n17 { --art: url('../assets/presages/17.webp'); }
+.ps-card-n18 { --art: url('../assets/presages/18.webp'); }
 .ps-card-n19 { --art: url('../assets/presages/19.webp'); }
+.ps-card-n20 { --art: url('../assets/presages/20.webp'); }
+.ps-card-n21 { --art: url('../assets/presages/21.webp'); }
 .ps-card-n22 { --art: url('../assets/presages/22.webp'); }
 .ps-card-n23 { --art: url('../assets/presages/23.webp'); }
+.ps-card-n24 { --art: url('../assets/presages/24.webp'); }
 .ps-card-n25 { --art: url('../assets/presages/25.webp'); }
 .ps-card-n26 { --art: url('../assets/presages/26.webp'); }
-.ps-card-n29 { --art: url('../assets/presages/29.webp'); }
+.ps-card-n27 { --art: url('../assets/presages/27.webp'); }
+.ps-card-n28 { --art: url('../assets/presages/28.webp'); }
+.ps-card-n29 { --art: url('../assets/presages/29.webp?v=2'); }
+.ps-card-n30 { --art: url('../assets/presages/30.webp'); }
+.ps-card-n31 { --art: url('../assets/presages/30.webp'); }
+.ps-card-n32 { --art: url('../assets/presages/30.webp'); }
+.ps-card-n33 { --art: url('../assets/presages/30.webp'); }
+.ps-card-n34 { --art: url('../assets/presages/30.webp'); }
+.ps-card-n35 { --art: url('../assets/presages/30.webp'); }
 .ps-card::after {
   /* 颜色识别条 */
   content: '';
@@ -128,15 +151,16 @@
   border: 1px solid rgba(255,255,255,0.22);
 }
 .ps-head .ps-sym svg { width: 14px; height: 14px; display: block; }
-/* 大卡底部：固定比例（5:3）的紧凑文案区，半透明底色既衬托文案又透出卡面 */
+/* 大卡底部：三行文字的紧凑文案区，半透明底色透出卡面。 */
 .ps-card:not(.ps-card-mini) .ps-effect {
   margin-top: auto; margin-bottom: 0;
-  width: 100%; aspect-ratio: 5 / 3;
+  width: 100%; aspect-ratio: auto;
+  height: calc(4.5em + 6px); min-height: calc(4.5em + 6px); flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
   padding: 2px 4px; border-radius: 8px;
   font-size: 8px; line-height: 1.5;
   color: #eef3f9;
-  background: linear-gradient(rgba(8,10,14,0.3), rgba(8,10,14,0.3)), var(--c);
+  background: rgba(12,18,24,0.5);
   border: 1px solid rgba(255,255,255,0.16);
   text-shadow: 0 1px 2px rgba(0,0,0,0.8);
 }
@@ -167,12 +191,23 @@
  * 点数与时机图标保持等大（12 / 11 / 10）。 */
 .ps-card-mini {
   width: var(--mini-w); height: var(--mini-h);
-  padding: 8px 3px 6px; border-radius: 6px; gap: 2px;
+  --ps-marker-size: 16px; --ps-timing-size: 12px;
+  padding: 18px 3px 6px; border-radius: 6px; gap: 2px;
   justify-content: center;
 }
 .ps-card-mini .ps-corner { font-size: 12px; top: 2px; left: 4px; }
-.ps-card-mini .ps-sym { top: 2px; right: 3px; }
-.ps-card-mini .ps-sym svg { width: 12px; height: 12px; }
+/* 时机标记固定在右上，浅色图标和深色底确保各张插画上都可辨认。 */
+.ps-card-mini .ps-sym {
+  position: absolute; top: 2px; right: 2px;
+  width: var(--ps-marker-size); height: var(--ps-marker-size);
+  display: flex; align-items: center; justify-content: center;
+  color: #f4f7fb; background: rgba(12,18,24,0.82);
+  border-radius: 3px; opacity: 1; filter: none;
+}
+.ps-card-mini .ps-sym .ico { display: flex; width: auto; height: auto; line-height: 1; }
+.ps-card-mini .ps-sym svg,
+.ps-card-mini .ps-sym img { width: var(--ps-timing-size); height: var(--ps-timing-size); display: block; }
+.ps-sym img { filter: brightness(0) invert(1); }
 .ps-card-mini .ps-name { font-size: 10px; letter-spacing: 0.5px; }
 .ps-card-mini .ps-effect { display: none; }
 .ps-card-mini::after { left: 4px; right: 4px; bottom: 3px; height: 2px; }
@@ -295,12 +330,12 @@
  * 这里只按断点收紧内部点数/时机图标/名称字号，保持点数与图标等大。 */
 @media (max-width: 768px) {
   .ps-card-mini .ps-corner { font-size: 11px; }
-  .ps-card-mini .ps-sym svg { width: 11px; height: 11px; }
+  .ps-card-mini { --ps-marker-size: 15px; --ps-timing-size: 11px; }
   .ps-card-mini .ps-name { font-size: 9px; }
 }
 @media (max-width: 480px) {
   .ps-card-mini .ps-corner { font-size: 10px; }
-  .ps-card-mini .ps-sym svg { width: 10px; height: 10px; }
+  .ps-card-mini { --ps-marker-size: 14px; --ps-timing-size: 10px; }
   .ps-card-mini .ps-name { font-size: 8.5px; }
 }
 

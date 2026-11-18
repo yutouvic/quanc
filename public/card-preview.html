@@ -185,7 +185,7 @@
     }).join('');
     const omens = [[1,'生命','#3f9b4f','弃掉数值最高的绿色牌。'],[10,'谜','#d9ae2e','场上若有至少一张绝对牌（30-35），弃掉此牌。'],[17,'狡黠','#8a5cc9','此牌属于所有颜色（绿、黄、红、蓝）。'],[26,'悲伤','#3f78c9','忽略数值最高的牌。']];
     document.querySelector('#ps-samples').innerHTML = omens.map(([n,name,c,effect]) => {
-      const node = mini => `<div class="ps-card ps-card-art ps-card-n${n} ${mini ? 'ps-card-mini' : ''}" style="--c:${c}">${mini ? `<div class="ps-corner">${n}</div><div class="ps-name">${name}</div>` : `<div class="ps-head"><div class="ps-corner">${n}</div><div class="ps-name">${name}</div><div class="ps-sym"><img src="assets/沙漏.svg" width="14" height="14" alt="回合结束" /></div></div><div class="ps-effect">${effect}</div>`}</div>`;
+      const node = mini => `<div class="ps-card ps-card-art ps-card-n${n} ${mini ? 'ps-card-mini' : ''}" style="--c:${c}">${mini ? `<div class="ps-corner">${n}</div><div class="ps-sym"><img src="assets/沙漏.svg" alt="回合结束结算" /></div><div class="ps-name">${name}</div>` : `<div class="ps-head"><div class="ps-corner">${n}</div><div class="ps-name">${name}</div><div class="ps-sym"><img src="assets/沙漏.svg" width="14" height="14" alt="回合结束" /></div></div><div class="ps-effect">${effect}</div>`}</div>`;
       return pair(node(false),node(true));
     }).join('');
     for (const card of document.querySelectorAll('.card, .r7-card, .rg-card, .ps-card')) {

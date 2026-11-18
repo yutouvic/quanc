@@ -1942,8 +1942,8 @@ function psHandCount(G, id) {
   return Number(p.hand) || 0;
 }
 
-/** Presages 有实景卡面图的点数（对应 assets/presages/<点数>.webp）；缺失的点数保持渐变卡面。 */
-const PRESAGES_CARD_ART = new Set([1, 5, 8, 10, 13, 17, 19, 22, 23, 25, 26, 29]);
+/** Presages 全部 35 个点数使用插画；30–35「绝对」在 CSS 中共用 30.webp。 */
+const PRESAGES_CARD_ART = new Set(Array.from({ length: 35 }, (_, i) => i + 1));
 
 /**
  * Presages 卡牌节点。
@@ -1974,7 +1974,7 @@ function presagesCardNode(card, {
   };
   if (onClick) { attrs.role = 'button'; attrs.tabindex = '0'; attrs.onClick = onClick; }
   const corner = el('div', { class: 'ps-corner', text: String(card.number) });
-  const sym = el('div', { class: 'ps-sym' }, [
+  const sym = el('div', { class: 'ps-sym', role: 'img', 'aria-label': card.timing === 'lightning' ? '立即结算' : '回合结束结算' }, [
     svgNode(PRESAGES_TIMING_ICONS[card.timing === 'lightning' ? 'lightning' : 'hourglass']),
   ]);
   const name = el('div', { class: 'ps-name', text: card.name });

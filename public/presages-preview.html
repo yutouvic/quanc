@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Presages 全卡面预览</title>
+  <link rel="stylesheet" href="css/presages.css">
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 32px; background: #121820; color: #eef3f9; font-family: system-ui, sans-serif; --mini-w: 46px; --mini-h: 62px; }
+    h1 { font-size: 24px; } p { color: #aab8c6; }
+    main { display: grid; grid-template-columns: repeat(auto-fill, minmax(186px, 1fr)); gap: 20px; }
+    article { display: flex; align-items: center; gap: 12px; padding: 12px; border: 1px solid #ffffff18; border-radius: 12px; }
+  </style>
+</head>
+<body>
+  <h1>Presages 全卡面预览</h1>
+  <p>1–29 独立插画 · 30–35「绝对」共用插画 · 同时预览手牌与场上小卡</p>
+  <main></main>
+  <script>
+    const cards = [{"number": 1, "name": "生命", "color": "green", "timing": "hourglass", "effect": "弃掉数值最高的绿色牌。"}, {"number": 2, "name": "爱", "color": "green", "timing": "hourglass", "effect": "场上若有其他绿色牌，弃掉此牌。"}, {"number": 3, "name": "友谊", "color": "green", "timing": "hourglass", "effect": "场上若有黄色牌，弃掉此牌。"}, {"number": 4, "name": "平静", "color": "green", "timing": "hourglass", "effect": "场上若有红色牌，弃掉此牌。"}, {"number": 5, "name": "盛宴", "color": "green", "timing": "hourglass", "effect": "场上若有蓝色牌，弃掉此牌。"}, {"number": 6, "name": "希望", "color": "green", "timing": "hourglass", "effect": "此牌数值若为场上最低，弃掉此牌。"}, {"number": 7, "name": "春", "color": "green", "timing": "hourglass", "effect": "此牌若是场上唯一的绿色牌，弃掉此牌。"}, {"number": 8, "name": "死亡", "color": "green", "timing": "hourglass", "effect": "弃掉数值最低的绿色牌。"}, {"number": 9, "name": "谎言", "color": "yellow", "timing": "hourglass", "effect": "弃掉数值最高的黄色牌。"}, {"number": 10, "name": "谜", "color": "yellow", "timing": "hourglass", "effect": "场上若有至少一张绝对牌（30-35），弃掉此牌。"}, {"number": 11, "name": "夏", "color": "yellow", "timing": "hourglass", "effect": "此牌若是场上唯一的黄色牌，弃掉此牌。"}, {"number": 12, "name": "恐惧", "color": "yellow", "timing": "hourglass", "effect": "不能弃掉此牌，除非它赢得此回合。"}, {"number": 13, "name": "运气", "color": "yellow", "timing": "hourglass", "effect": "若此牌被弃掉，您从手中弃掉一张牌。"}, {"number": 14, "name": "镜子", "color": "yellow", "timing": "hourglass", "effect": "数值最低的牌赢得此回合。"}, {"number": 15, "name": "律法", "color": "yellow", "timing": "lightning", "effect": "本回合尚未出牌的玩家须打出低/高于15的牌（由您指定）。"}, {"number": 16, "name": "真相", "color": "yellow", "timing": "hourglass", "effect": "弃掉数值最低的黄色牌。"}, {"number": 17, "name": "狡黠", "color": "multi", "timing": "hourglass", "effect": "此牌属于所有颜色（绿、黄、红、蓝）。"}, {"number": 18, "name": "白昼", "color": "red", "timing": "hourglass", "effect": "弃掉数值最高的红色牌。"}, {"number": 19, "name": "秋", "color": "red", "timing": "hourglass", "effect": "场上若无其他红色牌，弃掉此牌。"}, {"number": 20, "name": "和谐", "color": "red", "timing": "hourglass", "effect": "弃掉数值最低的牌。"}, {"number": 21, "name": "梦", "color": "red", "timing": "lightning", "effect": "若您将此牌打在未出牌玩家前，则他须立刻出牌在您面前。"}, {"number": 22, "name": "骄傲", "color": "red", "timing": "hourglass", "effect": "由您左侧的玩家开始下一回合。"}, {"number": 23, "name": "嫉妒", "color": "red", "timing": "lightning", "effect": "将此牌与场上任一张牌交换。"}, {"number": 24, "name": "秘密", "color": "red", "timing": "lightning", "effect": "指定一位玩家对您或另一位玩家（由您指定）揭示一张手牌。"}, {"number": 25, "name": "黑夜", "color": "red", "timing": "hourglass", "effect": "弃掉数值最低的红色牌。"}, {"number": 26, "name": "悲伤", "color": "blue", "timing": "hourglass", "effect": "忽略数值最高的牌。"}, {"number": 27, "name": "冬", "color": "blue", "timing": "hourglass", "effect": "弃掉场上所有黄色牌。"}, {"number": 28, "name": "愤怒", "color": "blue", "timing": "lightning", "effect": "指定一位其他玩家，他将已打出的牌收回，并另出一张牌。"}, {"number": 29, "name": "背叛", "color": "blue", "timing": "lightning", "effect": "用一张手牌交换场上的一张牌。"}, {"number": 30, "name": "绝对", "color": "blue", "timing": "lightning", "effect": "指定一位玩家与您交换一张手牌。"}, {"number": 31, "name": "绝对", "color": "blue", "timing": "lightning", "effect": "指定一位玩家与您交换一张手牌。"}, {"number": 32, "name": "绝对", "color": "blue", "timing": "lightning", "effect": "指定一位玩家与您交换一张手牌。"}, {"number": 33, "name": "绝对", "color": "blue", "timing": "lightning", "effect": "指定一位玩家与您交换一张手牌。"}, {"number": 34, "name": "绝对", "color": "blue", "timing": "lightning", "effect": "指定一位玩家与您交换一张手牌。"}, {"number": 35, "name": "绝对", "color": "blue", "timing": "lightning", "effect": "指定一位玩家与您交换一张手牌。"}];
+    const colors = { green: '#3f9b4f', yellow: '#d9ae2e', red: '#c9443f', blue: '#3f78c9', multi: '#8a5cc9' };
+    const symbol = timing => `<span class="ps-sym"><img src="assets/${timing === 'lightning' ? '闪电' : '沙漏'}.svg" width="14" height="14" alt="${timing === 'lightning' ? '立即结算' : '回合结束'}"></span>`;
+    document.querySelector('main').innerHTML = cards.map(card => {
+      const { number, name, color, timing, effect } = card;
+      const header = `<span class="ps-corner">${number}</span><span class="ps-name">${name}</span>${symbol(timing)}`;
+      const classes = `ps-card ps-card-art ps-card-n${number} ps-card-${color}`;
+      return `<article aria-label="${number} ${name}"><div class="${classes}" style="--c:${colors[color]}"><div class="ps-head">${header}</div><div class="ps-effect">${effect}</div></div><div class="${classes} ps-card-mini" style="--c:${colors[color]}">${header}</div></article>`;
+    }).join('');
+  </script>
+</body>
+</html>
